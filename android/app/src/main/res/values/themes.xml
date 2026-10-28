@@ -1,0 +1,3 @@
+<resources>
+    <style name="Theme.PiSound" parent="android:Theme.Material.NoActionBar" />
+</resources>

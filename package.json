@@ -1,0 +1,20 @@
+{
+  "name": "pisound",
+  "version": "1.0.0",
+  "description": "BSS Soundweb London / HiQnet wireless mic control app and protocol tools",
+  "type": "module",
+  "scripts": {
+    "sim": "node scripts/simulate-soundweb.mjs",
+    "test:client": "node scripts/test-client.mjs"
+  },
+  "keywords": [
+    "soundweb",
+    "hiqnet",
+    "bss",
+    "audio",
+    "dante",
+    "android"
+  ],
+  "author": "Juha Itäleino",
+  "license": "ISC"
+}
