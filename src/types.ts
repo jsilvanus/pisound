@@ -4,6 +4,60 @@
 
 export type MicGroup = 'handheld' | 'madonna' | 'wired';
 
+export type MixControlType = 'toggle' | 'gain';
+
+export interface AudioMixConfig {
+  id: string; // e.g. 'sali', 'striimi', 'webradio', 'videochat'
+  name: string; // e.g. 'Sali (Kirkkosali PA)', 'Striimi (Broadcast)', 'Web Radio'
+  controlType: MixControlType; // 'toggle' = On/Off routing only; 'gain' = Fader 0..100% + Mute
+  hasMasterFader: boolean;
+  defaultMasterVolume: number; // 0..100
+  defaultEnabled: boolean; // default channel routing if not explicitly set
+  nodeId?: number; // BSS Soundweb Node ID
+  objectId?: number[]; // 3-byte BSS Soundweb Object ID
+  masterParamId?: number;
+}
+
+export interface MixMasterState {
+  id: string;
+  name: string;
+  controlType: MixControlType;
+  volumePercent: number; // 0..100%
+  isMuted: boolean;
+}
+
+export interface ChannelMixSend {
+  enabled: boolean; // true = routed/unmuted in this mix; false = muted/off in this mix
+  volumePercent: number; // 0..100% (gain in mix; ignored when controlType is 'toggle')
+}
+
+export const DEFAULT_MIXES: AudioMixConfig[] = [
+  {
+    id: 'sali',
+    name: 'Sali (Kirkkosali PA)',
+    controlType: 'toggle', // On/Off only, no per-channel gain fader
+    hasMasterFader: true,
+    defaultMasterVolume: 80,
+    defaultEnabled: true,
+  },
+  {
+    id: 'striimi',
+    name: 'Striimi (YouTube / Broadcast)',
+    controlType: 'gain', // Full per-channel gain fader + mute
+    hasMasterFader: true,
+    defaultMasterVolume: 85,
+    defaultEnabled: true,
+  },
+  {
+    id: 'webradio',
+    name: 'Web Radio (Nettiradio)',
+    controlType: 'gain', // Dedicated gain tap
+    hasMasterFader: true,
+    defaultMasterVolume: 80,
+    defaultEnabled: true,
+  },
+];
+
 export type InputProfileId =
   | 'speech'
   | 'vocal'
@@ -253,7 +307,7 @@ export interface MicChannelConfig {
 
 export interface MicChannelState extends MicChannelConfig {
   isOn: boolean; // true = unmuted / live, false = muted / off
-  volumePercent: number; // 0..100% (current active position)
+  volumePercent: number; // 0..100% (current active position in default/stream mix)
   baseVolumePercent: number; // Calibrated profile baseline
   profile: InputProfileId;
   eq: ChannelEqState;
@@ -261,6 +315,7 @@ export interface MicChannelState extends MicChannelConfig {
   signalPresent: boolean;
   peakDbfs: number; // Instantaneous or RMS meter (-80 to 0)
   lastChangedAt: string;
+  mixes: Record<string, ChannelMixSend>; // Per-mix routing and gain (e.g. sali, striimi, webradio)
 }
 
 export type RoutingPresetKey = 'mixer' | 'normal' | 'open' | 'mute';
@@ -310,6 +365,7 @@ export interface SystemSoundSnapshot {
   currentPreset: RoutingPreset;
   activeWirelessCount: number;
   activeWiredCount: number;
+  mixes: MixMasterState[];
   channels: MicChannelState[];
   timestamp: string;
 }

@@ -1,5 +1,6 @@
 import fastify, { type FastifyInstance } from 'fastify';
 import { SoundManager } from './manager.js';
+import { TelemetrySender } from './telemetry/sender.js';
 import {
   INPUT_PROFILES,
   type AgcConfig,
@@ -10,14 +11,18 @@ import {
 } from './types.js';
 
 export interface ServerOptions {
-  port?: number;
-  host?: string;
-  manager?: SoundManager;
+  port?: number | undefined;
+  host?: string | undefined;
+  manager?: SoundManager | undefined;
+  enableTelemetry?: boolean | undefined;
+  telemetryHost?: string | undefined;
+  telemetryPort?: number | undefined;
 }
 
 export function createServer(options: ServerOptions = {}): {
   app: FastifyInstance;
   manager: SoundManager;
+  telemetrySender?: TelemetrySender | undefined;
   start: () => Promise<string>;
   stop: () => Promise<void>;
 } {
@@ -25,6 +30,14 @@ export function createServer(options: ServerOptions = {}): {
   const manager = options.manager ?? new SoundManager();
   const port = options.port ?? parseInt(process.env.PISOUND_PORT || '3300', 10);
   const host = options.host ?? (process.env.PISOUND_HOST || '0.0.0.0');
+
+  let telemetrySender: TelemetrySender | undefined;
+  if (options.enableTelemetry !== false && process.env.PISOUND_TELEMETRY !== '0') {
+    telemetrySender = new TelemetrySender(manager, {
+      host: options.telemetryHost,
+      port: options.telemetryPort,
+    });
+  }
 
   // CORS headers
   app.addHook('onRequest', async (req, reply) => {
@@ -215,7 +228,87 @@ export function createServer(options: ServerOptions = {}): {
     }
   });
 
-  // 17. Server-Sent Events (SSE) stream for live updates
+  // 17. Multi-mix management: List all configured mixes and master levels
+  app.get('/api/v1/mixes', async () => {
+    return {
+      mixes: manager.getMixes(),
+      masterStates: manager.getMixMasterStates(),
+    };
+  });
+
+  // 18. Get single mix state and all channel routings for that mix
+  app.get<{ Params: { mixId: string } }>('/api/v1/mixes/:mixId', async (req, reply) => {
+    try {
+      return manager.getMix(req.params.mixId);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return reply.status(404).send({ error: message });
+    }
+  });
+
+  // 19. Set mix master volume
+  app.post<{ Params: { mixId: string }; Body: { volumePercent: number } }>(
+    '/api/v1/mixes/:mixId/master/volume',
+    async (req, reply) => {
+      if (typeof req.body?.volumePercent !== 'number') {
+        return reply.status(400).send({ error: "Missing numeric field 'volumePercent'" });
+      }
+      try {
+        const state = manager.setMixMasterVolume(req.params.mixId, req.body.volumePercent);
+        return { ok: true, mixId: req.params.mixId, master: state };
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        return reply.status(400).send({ error: message });
+      }
+    }
+  );
+
+  // 20. Set mix master mute
+  app.post<{ Params: { mixId: string }; Body: { muted: boolean } }>(
+    '/api/v1/mixes/:mixId/master/mute',
+    async (req, reply) => {
+      if (typeof req.body?.muted !== 'boolean') {
+        return reply.status(400).send({ error: "Missing boolean field 'muted'" });
+      }
+      try {
+        const state = manager.setMixMasterMute(req.params.mixId, req.body.muted);
+        return { ok: true, mixId: req.params.mixId, master: state };
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        return reply.status(400).send({ error: message });
+      }
+    }
+  );
+
+  // 21. Set channel send routing in mix (enabled on/off, volumePercent)
+  app.post<{
+    Params: { mixId: string; channelId: string };
+    Body: { enabled?: boolean; volumePercent?: number };
+  }>('/api/v1/mixes/:mixId/channels/:channelId', async (req, reply) => {
+    try {
+      const send = manager.setMixChannel(req.params.mixId, req.params.channelId, req.body || {});
+      return { ok: true, mixId: req.params.mixId, channelId: req.params.channelId, send };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return reply.status(400).send({ error: message });
+    }
+  });
+
+  // 22. Toggle channel routing in mix
+  app.post<{ Params: { mixId: string; channelId: string } }>(
+    '/api/v1/mixes/:mixId/channels/:channelId/toggle',
+    async (req, reply) => {
+      try {
+        const send = manager.toggleMixChannel(req.params.mixId, req.params.channelId);
+        return { ok: true, mixId: req.params.mixId, channelId: req.params.channelId, send };
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        return reply.status(400).send({ error: message });
+      }
+    }
+  );
+
+  // 23. Server-Sent Events (SSE) stream for live updates
   app.get('/api/v1/events', (req, reply) => {
     reply.raw.setHeader('Content-Type', 'text/event-stream');
     reply.raw.setHeader('Cache-Control', 'no-cache');
@@ -238,25 +331,40 @@ export function createServer(options: ServerOptions = {}): {
       reply.raw.write(`event: bulk_change\ndata: ${JSON.stringify(bulk)}\n\n`);
     };
 
+    const onMixMasterChange = (master: unknown) => {
+      reply.raw.write(`event: mix_master_change\ndata: ${JSON.stringify(master)}\n\n`);
+    };
+
+    const onMixChannelChange = (change: unknown) => {
+      reply.raw.write(`event: mix_channel_change\ndata: ${JSON.stringify(change)}\n\n`);
+    };
+
     manager.on('mic_change', onMicChange);
     manager.on('preset_change', onPresetChange);
     manager.on('bulk_change', onBulkChange);
+    manager.on('mix_master_change', onMixMasterChange);
+    manager.on('mix_channel_change', onMixChannelChange);
 
     req.raw.on('close', () => {
       manager.off('mic_change', onMicChange);
       manager.off('preset_change', onPresetChange);
       manager.off('bulk_change', onBulkChange);
+      manager.off('mix_master_change', onMixMasterChange);
+      manager.off('mix_channel_change', onMixChannelChange);
     });
   });
 
   return {
     app,
     manager,
+    telemetrySender,
     start: async () => {
+      telemetrySender?.start();
       await app.listen({ port, host });
       return `http://${host}:${port}`;
     },
     stop: async () => {
+      telemetrySender?.stop();
       manager.close();
       await app.close();
     },

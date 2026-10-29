@@ -57,3 +57,65 @@ test('server: assigns profile and updates EQ / AGC via REST', async () => {
 
   await stop();
 });
+
+test('server: supports multi-mix REST routes with Sali toggle and Striimi gain', async () => {
+  const manager = new SoundManager({ mode: 'simulation', enableAutoPiLoop: false });
+  const { app, stop } = createServer({ manager, enableTelemetry: false });
+
+  // 1. GET /api/v1/mixes
+  const mixesRes = await app.inject({ method: 'GET', url: '/api/v1/mixes' });
+  assert.equal(mixesRes.statusCode, 200);
+  assert.equal(mixesRes.json().mixes.length, 3);
+
+  // 2. GET /api/v1/mixes/sali
+  const saliRes = await app.inject({ method: 'GET', url: '/api/v1/mixes/sali' });
+  assert.equal(saliRes.statusCode, 200);
+  assert.equal(saliRes.json().config.controlType, 'toggle');
+  assert.equal(saliRes.json().channels.length, 26);
+
+  // 3. POST /api/v1/mixes/sali/channels/kapula1 with enabled: false
+  const saliToggleRes = await app.inject({
+    method: 'POST',
+    url: '/api/v1/mixes/sali/channels/kapula1',
+    payload: { enabled: false },
+  });
+  assert.equal(saliToggleRes.statusCode, 200);
+  assert.equal(saliToggleRes.json().send.enabled, false);
+
+  // 4. POST /api/v1/mixes/sali/channels/kapula1 with volumePercent should FAIL (toggle only!)
+  const saliFailRes = await app.inject({
+    method: 'POST',
+    url: '/api/v1/mixes/sali/channels/kapula1',
+    payload: { volumePercent: 75 },
+  });
+  assert.equal(saliFailRes.statusCode, 400);
+  assert.match(saliFailRes.json().error, /toggle mix/);
+
+  // 5. POST /api/v1/mixes/striimi/channels/kapula1 with volumePercent should SUCCEED
+  const striimiGainRes = await app.inject({
+    method: 'POST',
+    url: '/api/v1/mixes/striimi/channels/kapula1',
+    payload: { volumePercent: 88 },
+  });
+  assert.equal(striimiGainRes.statusCode, 200);
+  assert.equal(striimiGainRes.json().send.volumePercent, 88);
+
+  // 6. Master controls
+  const masterVolRes = await app.inject({
+    method: 'POST',
+    url: '/api/v1/mixes/striimi/master/volume',
+    payload: { volumePercent: 92 },
+  });
+  assert.equal(masterVolRes.statusCode, 200);
+  assert.equal(masterVolRes.json().master.volumePercent, 92);
+
+  const masterMuteRes = await app.inject({
+    method: 'POST',
+    url: '/api/v1/mixes/striimi/master/mute',
+    payload: { muted: true },
+  });
+  assert.equal(masterMuteRes.statusCode, 200);
+  assert.equal(masterMuteRes.json().master.isMuted, true);
+
+  await stop();
+});

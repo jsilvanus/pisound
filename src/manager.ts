@@ -1,14 +1,18 @@
 import { EventEmitter } from 'node:events';
 import { DEFAULT_CHANNELS } from './channels.js';
 import {
+  DEFAULT_MIXES,
   INPUT_PROFILES,
   KNOWN_PRESETS,
   type AgcConfig,
+  type AudioMixConfig,
   type ChannelEqState,
+  type ChannelMixSend,
   type InputProfileId,
   type MicChannelConfig,
   type MicChannelState,
   type MicGroup,
+  type MixMasterState,
   type RoutingPreset,
   type RoutingPresetKey,
   type SoundwebConnectionStatus,
@@ -27,6 +31,7 @@ export interface SoundManagerOptions {
   host?: string;
   port?: number;
   channels?: MicChannelConfig[];
+  mixes?: AudioMixConfig[];
   initialPreset?: RoutingPresetKey;
   enableAutoPiLoop?: boolean;
 }
@@ -35,6 +40,8 @@ export class SoundManager extends EventEmitter {
   public readonly mode: 'production' | 'simulation';
   private channels = new Map<string, MicChannelState>();
   private channelIndexMap = new Map<number, MicChannelState>();
+  private mixConfigs = new Map<string, AudioMixConfig>();
+  private mixMasterStates = new Map<string, MixMasterState>();
   private currentPreset: RoutingPreset;
   private soundweb: SoundwebClient | SoundwebSimulator;
   private autoPiTimer: NodeJS.Timeout | null = null;
@@ -45,6 +52,20 @@ export class SoundManager extends EventEmitter {
     this.mode = options.mode || (process.env.PISOUND_MODE === 'production' ? 'production' : 'simulation');
     this.currentPreset = KNOWN_PRESETS[options.initialPreset || 'normal'];
 
+    // 1. Configure audio mixes (Sali, Striimi, WebRadio, or custom)
+    const mixList = options.mixes || DEFAULT_MIXES;
+    for (const mix of mixList) {
+      this.mixConfigs.set(mix.id, mix);
+      this.mixMasterStates.set(mix.id, {
+        id: mix.id,
+        name: mix.name,
+        controlType: mix.controlType,
+        volumePercent: mix.defaultMasterVolume,
+        isMuted: false,
+      });
+    }
+
+    // 2. Configure channels
     const channelConfigs = options.channels || DEFAULT_CHANNELS;
     const now = new Date().toISOString();
 
@@ -54,6 +75,24 @@ export class SoundManager extends EventEmitter {
 
       const isDefaultOn =
         cfg.id === 'kapula1' || cfg.id === 'wired1' || cfg.id === 'wired3';
+
+      // Build mix routing table for this channel
+      const channelMixes: Record<string, ChannelMixSend> = {};
+      for (const mix of this.mixConfigs.values()) {
+        let enabled = mix.defaultEnabled;
+        let volumePercent = profileDef.defaultVolume;
+
+        // Specific church acoustic rule: Ambient mic (wired12 Parvi) must NEVER route into Sali (PA)!
+        if (cfg.id === 'wired12' && mix.id === 'sali') {
+          enabled = false;
+          volumePercent = 0;
+        } else if (mix.id === 'sali') {
+          enabled = isDefaultOn;
+          volumePercent = 100; // Sali is toggle only (no per-channel gain fader)
+        }
+
+        channelMixes[mix.id] = { enabled, volumePercent };
+      }
 
       const state: MicChannelState = {
         ...cfg,
@@ -66,6 +105,7 @@ export class SoundManager extends EventEmitter {
         signalPresent: false,
         peakDbfs: -60, // ambient silence floor
         lastChangedAt: now,
+        mixes: channelMixes,
       };
 
       this.channels.set(cfg.id, state);
@@ -108,9 +148,151 @@ export class SoundManager extends EventEmitter {
       currentPreset: this.currentPreset,
       activeWirelessCount: activeWireless,
       activeWiredCount: activeWired,
+      mixes: this.getMixMasterStates(),
       channels: channelList,
       timestamp: new Date().toISOString(),
     };
+  }
+
+  public getMixes(): AudioMixConfig[] {
+    return Array.from(this.mixConfigs.values());
+  }
+
+  public getMixMasterStates(): MixMasterState[] {
+    return Array.from(this.mixMasterStates.values());
+  }
+
+  public getMix(mixId: string): {
+    config: AudioMixConfig;
+    master: MixMasterState;
+    channels: Array<{
+      id: string;
+      name: string;
+      role: string;
+      group: MicGroup;
+      channelIndex: number;
+      send: ChannelMixSend;
+      peakDbfs: number;
+    }>;
+  } {
+    const config = this.mixConfigs.get(mixId);
+    const master = this.mixMasterStates.get(mixId);
+    if (!config || !master) {
+      throw new Error(`Unknown mix: ${mixId}`);
+    }
+
+    const channels = Array.from(this.channels.values()).map((ch) => ({
+      id: ch.id,
+      name: ch.name,
+      role: ch.role,
+      group: ch.group,
+      channelIndex: ch.channelIndex,
+      send: ch.mixes[mixId] || { enabled: false, volumePercent: 0 },
+      peakDbfs: ch.peakDbfs,
+    }));
+
+    return { config, master, channels };
+  }
+
+  public setMixMasterVolume(mixId: string, volumePercent: number): MixMasterState {
+    const master = this.mixMasterStates.get(mixId);
+    const config = this.mixConfigs.get(mixId);
+    if (!master || !config) {
+      throw new Error(`Unknown mix: ${mixId}`);
+    }
+
+    const clamped = Math.max(0, Math.min(100, Math.round(volumePercent)));
+    master.volumePercent = clamped;
+
+    if (config.objectId) {
+      const objId = Buffer.from(config.objectId);
+      const paramId = config.masterParamId ?? 0;
+      this.soundweb.send(buildSetGainPercentPacket(paramId, clamped, config.nodeId, objId));
+    }
+
+    this.emit('mix_master_change', master);
+    return master;
+  }
+
+  public setMixMasterMute(mixId: string, isMuted: boolean): MixMasterState {
+    const master = this.mixMasterStates.get(mixId);
+    const config = this.mixConfigs.get(mixId);
+    if (!master || !config) {
+      throw new Error(`Unknown mix: ${mixId}`);
+    }
+
+    master.isMuted = isMuted;
+
+    if (config.objectId) {
+      const objId = Buffer.from(config.objectId);
+      const paramId = (config.masterParamId ?? 0) + 1;
+      this.soundweb.send(buildSetMutePacket(paramId, isMuted, config.nodeId, objId));
+    }
+
+    this.emit('mix_master_change', master);
+    return master;
+  }
+
+  public setMixChannel(
+    mixId: string,
+    channelId: string,
+    send: { enabled?: boolean; volumePercent?: number }
+  ): ChannelMixSend {
+    const config = this.mixConfigs.get(mixId);
+    if (!config) {
+      throw new Error(`Unknown mix: ${mixId}`);
+    }
+
+    const channel = this.channels.get(channelId);
+    if (!channel) {
+      throw new Error(`Microphone channel not found: ${channelId}`);
+    }
+
+    // Enforce toggle vs gain rules
+    if (config.controlType === 'toggle') {
+      if (send.volumePercent !== undefined) {
+        throw new Error(
+          `Mix '${mixId}' (${config.name}) is a toggle mix (on/off routing only); per-channel gain faders are not supported.`
+        );
+      }
+    }
+
+    const currentSend = channel.mixes[mixId] || {
+      enabled: config.defaultEnabled,
+      volumePercent: config.controlType === 'toggle' ? 100 : 75,
+    };
+
+    if (send.enabled !== undefined) {
+      currentSend.enabled = send.enabled;
+    }
+
+    if (send.volumePercent !== undefined && config.controlType === 'gain') {
+      currentSend.volumePercent = Math.max(0, Math.min(100, Math.round(send.volumePercent)));
+    }
+
+    channel.mixes[mixId] = currentSend;
+    channel.lastChangedAt = new Date().toISOString();
+
+    // If setting default stream mix, keep top-level volumePercent in sync
+    if (mixId === 'striimi') {
+      channel.volumePercent = currentSend.volumePercent;
+      channel.baseVolumePercent = currentSend.volumePercent;
+      this.soundweb.send(buildSetGainPercentPacket(channel.channelIndex, currentSend.volumePercent));
+    }
+
+    this.emit('mix_channel_change', { mixId, channelId, send: currentSend });
+    this.emit('mic_change', channel);
+    return currentSend;
+  }
+
+  public toggleMixChannel(mixId: string, channelId: string): ChannelMixSend {
+    const channel = this.channels.get(channelId);
+    if (!channel) {
+      throw new Error(`Microphone channel not found: ${channelId}`);
+    }
+    const current = channel.mixes[mixId];
+    const newEnabled = current ? !current.enabled : true;
+    return this.setMixChannel(mixId, channelId, { enabled: newEnabled });
   }
 
   public getChannel(id: string): MicChannelState | undefined {
@@ -164,6 +346,15 @@ export class SoundManager extends EventEmitter {
       if (shouldMute && ch.isOn) {
         ch.isOn = false;
         ch.lastChangedAt = now;
+
+        // Update mix sends: mute in sali and striimi, preserving ambient mic (wired12) in striimi/webradio
+        for (const mixId of Object.keys(ch.mixes)) {
+          if (ch.id === 'wired12' && (mixId === 'striimi' || mixId === 'webradio')) {
+            continue; // Ambient room mic stays live on stream!
+          }
+          ch.mixes[mixId]!.enabled = false;
+        }
+
         const packet = buildSetMutePacket(ch.channelIndex, true);
         this.soundweb.send(packet);
         this.emit('mic_change', ch);
@@ -173,6 +364,13 @@ export class SoundManager extends EventEmitter {
     // Turn target ON
     target.isOn = true;
     target.lastChangedAt = now;
+    for (const mixId of Object.keys(target.mixes)) {
+      if (target.id === 'wired12' && mixId === 'sali') {
+        continue; // Never route ambient mic into Sali (PA feedback guard)
+      }
+      target.mixes[mixId]!.enabled = true;
+    }
+
     const packet = buildSetMutePacket(target.channelIndex, false);
     this.soundweb.send(packet);
     this.emit('mic_change', target);
