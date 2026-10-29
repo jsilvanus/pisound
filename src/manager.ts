@@ -19,9 +19,16 @@ import {
   type SystemSoundSnapshot,
 } from './types.js';
 import {
+  BSS_OBJECT_IDS,
+  DEFAULT_NODE_ID,
+  DEFAULT_OBJECT_ID,
+  MSG_SET,
+  MSG_SET_PERCENT,
   buildRecallPresetPacket,
   buildSetGainPercentPacket,
   buildSetMutePacket,
+  paramIdForChannelGain,
+  paramIdForChannelMute,
 } from './protocol/london-di.js';
 import { SoundwebClient } from './soundweb/client.js';
 import { SoundwebSimulator } from './soundweb/simulator.js';
@@ -303,6 +310,14 @@ export class SoundManager extends EventEmitter {
     return Array.from(this.channels.values());
   }
 
+  private getChannelSendParams(ch: MicChannelConfig) {
+    const nodeId = ch.nodeId ?? DEFAULT_NODE_ID;
+    const objectId = ch.objectId ? Buffer.from(ch.objectId) : DEFAULT_OBJECT_ID;
+    const muteParam = ch.muteParamId ?? paramIdForChannelMute(ch.channelIndex);
+    const gainParam = ch.gainParamId ?? paramIdForChannelGain(ch.channelIndex);
+    return { nodeId, objectId, muteParam, gainParam };
+  }
+
   public setMicState(id: string, isOn: boolean): MicChannelState {
     const channel = this.channels.get(id);
     if (!channel) {
@@ -313,7 +328,8 @@ export class SoundManager extends EventEmitter {
     channel.lastChangedAt = new Date().toISOString();
 
     const isMuted = !isOn;
-    const packet = buildSetMutePacket(channel.channelIndex, isMuted);
+    const { nodeId, objectId, muteParam } = this.getChannelSendParams(channel);
+    const packet = buildSetMutePacket(muteParam, isMuted, nodeId, objectId);
     this.soundweb.send(packet);
 
     this.emit('mic_change', channel);
@@ -355,7 +371,8 @@ export class SoundManager extends EventEmitter {
           ch.mixes[mixId]!.enabled = false;
         }
 
-        const packet = buildSetMutePacket(ch.channelIndex, true);
+        const { nodeId, objectId, muteParam } = this.getChannelSendParams(ch);
+        const packet = buildSetMutePacket(muteParam, true, nodeId, objectId);
         this.soundweb.send(packet);
         this.emit('mic_change', ch);
       }
@@ -371,7 +388,8 @@ export class SoundManager extends EventEmitter {
       target.mixes[mixId]!.enabled = true;
     }
 
-    const packet = buildSetMutePacket(target.channelIndex, false);
+    const { nodeId, objectId, muteParam } = this.getChannelSendParams(target);
+    const packet = buildSetMutePacket(muteParam, false, nodeId, objectId);
     this.soundweb.send(packet);
     this.emit('mic_change', target);
 
@@ -389,7 +407,8 @@ export class SoundManager extends EventEmitter {
     channel.baseVolumePercent = clamped; // Manual override sets new baseline
     channel.lastChangedAt = new Date().toISOString();
 
-    const packet = buildSetGainPercentPacket(channel.channelIndex, clamped);
+    const { nodeId, objectId, gainParam } = this.getChannelSendParams(channel);
+    const packet = buildSetGainPercentPacket(gainParam, clamped, nodeId, objectId);
     this.soundweb.send(packet);
 
     this.emit('mic_change', channel);
@@ -419,7 +438,8 @@ export class SoundManager extends EventEmitter {
     channel.lastChangedAt = new Date().toISOString();
 
     // Send updated fader to Soundweb BLU-100
-    this.soundweb.send(buildSetGainPercentPacket(channel.channelIndex, profile.defaultVolume));
+    const { nodeId, objectId, gainParam } = this.getChannelSendParams(channel);
+    this.soundweb.send(buildSetGainPercentPacket(gainParam, profile.defaultVolume, nodeId, objectId));
 
     this.emit('mic_change', channel);
     return channel;
@@ -610,7 +630,8 @@ export class SoundManager extends EventEmitter {
         channel.lastChangedAt = new Date().toISOString();
 
         // Dispatch updated fader to BLU-100
-        this.soundweb.send(buildSetGainPercentPacket(channel.channelIndex, channel.volumePercent));
+        const { nodeId, objectId, gainParam } = this.getChannelSendParams(channel);
+        this.soundweb.send(buildSetGainPercentPacket(gainParam, channel.volumePercent, nodeId, objectId));
         this.emit('mic_change', channel);
       }
     }
@@ -621,21 +642,67 @@ export class SoundManager extends EventEmitter {
       this.emit('connection_change', status);
     });
 
+    // Two-way synchronization: handle parameter changes arriving from physical DSP (AMX, iPad Mika)
+    this.soundweb.on('message', (body: Buffer) => {
+      this.handleIncomingLondonDi(body);
+    });
+
     if (this.soundweb instanceof SoundwebSimulator) {
-      this.soundweb.on('sim_mute', ({ channelIndex, isMuted }) => {
-        const ch = this.channelIndexMap.get(channelIndex);
+      this.soundweb.on('sim_mute', ({ paramId, isMuted }) => {
+        const ch = Array.from(this.channels.values()).find(
+          (c) => c.muteParamId === paramId || c.channelIndex === paramId
+        );
         if (ch) {
           ch.isOn = !isMuted;
           ch.lastChangedAt = new Date().toISOString();
+          this.emit('mic_change', ch);
         }
       });
-      this.soundweb.on('sim_volume', ({ channelIndex, volumePercent }) => {
-        const ch = this.channelIndexMap.get(channelIndex);
+      this.soundweb.on('sim_volume', ({ paramId, volumePercent }) => {
+        const ch = Array.from(this.channels.values()).find(
+          (c) => c.gainParamId === paramId || c.channelIndex === paramId
+        );
         if (ch) {
           ch.volumePercent = volumePercent;
           ch.lastChangedAt = new Date().toISOString();
+          this.emit('mic_change', ch);
         }
       });
+    }
+  }
+
+  private handleIncomingLondonDi(body: Buffer): void {
+    if (body.length < 13) return;
+    const msgType = body[0];
+    const objId = body.subarray(4, 7);
+    const paramId = body.readUInt16BE(7);
+    const val = body.readUInt32BE(9);
+
+    if (msgType === MSG_SET) {
+      const isMuted = val !== 0;
+      for (const ch of this.channels.values()) {
+        const chObj = ch.objectId ? Buffer.from(ch.objectId) : DEFAULT_OBJECT_ID;
+        const chMuteParam = ch.muteParamId ?? paramIdForChannelMute(ch.channelIndex);
+        if (chObj.equals(objId) && chMuteParam === paramId) {
+          ch.isOn = !isMuted;
+          ch.lastChangedAt = new Date().toISOString();
+          this.emit('mic_change', ch);
+          break;
+        }
+      }
+    } else if (msgType === MSG_SET_PERCENT) {
+      const volumePercent = Math.round((val / 65536) * 100);
+      for (const ch of this.channels.values()) {
+        const chObj = ch.objectId ? Buffer.from(ch.objectId) : DEFAULT_OBJECT_ID;
+        const chGainParam = ch.gainParamId ?? paramIdForChannelGain(ch.channelIndex);
+        if (chObj.equals(objId) && chGainParam === paramId) {
+          ch.volumePercent = volumePercent;
+          ch.baseVolumePercent = volumePercent;
+          ch.lastChangedAt = new Date().toISOString();
+          this.emit('mic_change', ch);
+          break;
+        }
+      }
     }
   }
 }

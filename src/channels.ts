@@ -1,10 +1,16 @@
 import type { MicChannelConfig } from './types.js';
 
+// Physical BSS Soundweb London Object IDs in Keskuskirkko BLU-100 (Node 1)
+const OBJ_WL_MIXER = [0x00, 0x01, 0x4d]; // Obj 333 (12ch Wireless Automixer)
+const OBJ_MIC_MIXER = [0x00, 0x01, 0x04]; // Obj 260 (Sanctuary Fixed Speech Mic Automixer)
+const OBJ_PATCH_MICS = [0x00, 0x01, 0x65]; // Obj 357 (Pulpit Floor Drops 1-8)
+
 /**
- * Riihimäen Keskuskirkko audio input channel inventory with default profiles.
+ * Riihimäen Keskuskirkko audio input channel inventory with calibrated hardware mappings.
+ * Aligned with 'Riihimäen kirkko.audioarchitect' (HiQnet Node 1).
  */
 export const DEFAULT_CHANNELS: MicChannelConfig[] = [
-  // --- Wireless 1-4: Handheld microphones (Kapula 1-4) ---
+  // --- Wireless 1-4: Handheld microphones (Kapula 1-4) on WL Mixer (Obj 333) ---
   {
     id: 'kapula1',
     name: 'Kapula 1',
@@ -14,6 +20,10 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     isWireless: true,
     defaultVolume: 75,
     defaultProfile: 'speech',
+    nodeId: 1,
+    objectId: OBJ_WL_MIXER,
+    gainParamId: 0,
+    muteParamId: 1,
   },
   {
     id: 'kapula2',
@@ -24,6 +34,10 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     isWireless: true,
     defaultVolume: 75,
     defaultProfile: 'speech',
+    nodeId: 1,
+    objectId: OBJ_WL_MIXER,
+    gainParamId: 100,
+    muteParamId: 101,
   },
   {
     id: 'kapula3',
@@ -34,6 +48,10 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     isWireless: true,
     defaultVolume: 75,
     defaultProfile: 'speech',
+    nodeId: 1,
+    objectId: OBJ_WL_MIXER,
+    gainParamId: 200,
+    muteParamId: 201,
   },
   {
     id: 'kapula4',
@@ -44,9 +62,13 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     isWireless: true,
     defaultVolume: 75,
     defaultProfile: 'speech',
+    nodeId: 1,
+    objectId: OBJ_WL_MIXER,
+    gainParamId: 300,
+    muteParamId: 301,
   },
 
-  // --- Wireless 5-14: Headset / Earset microphones (Madonna 1-10) ---
+  // --- Wireless 5-14: Headset / Earset microphones (Madonna 1-10) on WL Mixer (Obj 333) ---
   {
     id: 'madonna1',
     name: 'Madonna 1',
@@ -56,6 +78,10 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     isWireless: true,
     defaultVolume: 80,
     defaultProfile: 'speech',
+    nodeId: 1,
+    objectId: OBJ_WL_MIXER,
+    gainParamId: 400,
+    muteParamId: 401,
   },
   {
     id: 'madonna2',
@@ -66,6 +92,10 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     isWireless: true,
     defaultVolume: 80,
     defaultProfile: 'speech',
+    nodeId: 1,
+    objectId: OBJ_WL_MIXER,
+    gainParamId: 500,
+    muteParamId: 501,
   },
   {
     id: 'madonna3',
@@ -76,6 +106,10 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     isWireless: true,
     defaultVolume: 80,
     defaultProfile: 'vocal',
+    nodeId: 1,
+    objectId: OBJ_WL_MIXER,
+    gainParamId: 600,
+    muteParamId: 601,
   },
   {
     id: 'madonna4',
@@ -86,6 +120,10 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     isWireless: true,
     defaultVolume: 80,
     defaultProfile: 'speech',
+    nodeId: 1,
+    objectId: OBJ_WL_MIXER,
+    gainParamId: 700,
+    muteParamId: 701,
   },
   {
     id: 'madonna5',
@@ -96,6 +134,10 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     isWireless: true,
     defaultVolume: 80,
     defaultProfile: 'speech',
+    nodeId: 1,
+    objectId: OBJ_WL_MIXER,
+    gainParamId: 800,
+    muteParamId: 801,
   },
   {
     id: 'madonna6',
@@ -106,6 +148,10 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     isWireless: true,
     defaultVolume: 80,
     defaultProfile: 'speech',
+    nodeId: 1,
+    objectId: OBJ_WL_MIXER,
+    gainParamId: 900,
+    muteParamId: 901,
   },
   {
     id: 'madonna7',
@@ -116,6 +162,10 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     isWireless: true,
     defaultVolume: 80,
     defaultProfile: 'speech',
+    nodeId: 1,
+    objectId: OBJ_WL_MIXER,
+    gainParamId: 1000,
+    muteParamId: 1001,
   },
   {
     id: 'madonna8',
@@ -126,6 +176,10 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     isWireless: true,
     defaultVolume: 80,
     defaultProfile: 'speech',
+    nodeId: 1,
+    objectId: OBJ_WL_MIXER,
+    gainParamId: 1100,
+    muteParamId: 1101,
   },
   {
     id: 'madonna9',
@@ -136,6 +190,10 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     isWireless: true,
     defaultVolume: 80,
     defaultProfile: 'speech',
+    nodeId: 1,
+    objectId: OBJ_WL_MIXER,
+    gainParamId: 1200,
+    muteParamId: 1201,
   },
   {
     id: 'madonna10',
@@ -146,9 +204,13 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     isWireless: true,
     defaultVolume: 80,
     defaultProfile: 'speech',
+    nodeId: 1,
+    objectId: OBJ_WL_MIXER,
+    gainParamId: 1300,
+    muteParamId: 1301,
   },
 
-  // --- Wired Microphones (1-12) ---
+  // --- Fixed Wired Microphones on Mic Mixer (Obj 260) ---
   {
     id: 'wired1',
     name: 'Alttari Vasen',
@@ -158,6 +220,10 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     isWireless: false,
     defaultVolume: 70,
     defaultProfile: 'speech',
+    nodeId: 1,
+    objectId: OBJ_MIC_MIXER,
+    gainParamId: 100,
+    muteParamId: 101,
   },
   {
     id: 'wired2',
@@ -168,6 +234,10 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     isWireless: false,
     defaultVolume: 70,
     defaultProfile: 'speech',
+    nodeId: 1,
+    objectId: OBJ_MIC_MIXER,
+    gainParamId: 200,
+    muteParamId: 201,
   },
   {
     id: 'wired3',
@@ -178,6 +248,10 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     isWireless: false,
     defaultVolume: 75,
     defaultProfile: 'speech',
+    nodeId: 1,
+    objectId: OBJ_MIC_MIXER,
+    gainParamId: 300,
+    muteParamId: 301,
   },
   {
     id: 'wired4',
@@ -188,6 +262,10 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     isWireless: false,
     defaultVolume: 75,
     defaultProfile: 'speech',
+    nodeId: 1,
+    objectId: OBJ_MIC_MIXER,
+    gainParamId: 0,
+    muteParamId: 1,
   },
   {
     id: 'wired5',
@@ -198,6 +276,10 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     isWireless: false,
     defaultVolume: 70,
     defaultProfile: 'choir',
+    nodeId: 1,
+    objectId: OBJ_MIC_MIXER,
+    gainParamId: 400,
+    muteParamId: 401,
   },
   {
     id: 'wired6',
@@ -208,7 +290,13 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     isWireless: false,
     defaultVolume: 70,
     defaultProfile: 'choir',
+    nodeId: 1,
+    objectId: OBJ_MIC_MIXER,
+    gainParamId: 500,
+    muteParamId: 501,
   },
+
+  // --- Stage Floor Drops on Patch Mics (Obj 357) ---
   {
     id: 'wired7',
     name: 'Urut Positiivi',
@@ -218,6 +306,10 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     isWireless: false,
     defaultVolume: 62,
     defaultProfile: 'organ',
+    nodeId: 1,
+    objectId: OBJ_PATCH_MICS,
+    gainParamId: 0,
+    muteParamId: 1,
   },
   {
     id: 'wired8',
@@ -228,6 +320,10 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     isWireless: false,
     defaultVolume: 62,
     defaultProfile: 'organ',
+    nodeId: 1,
+    objectId: OBJ_PATCH_MICS,
+    gainParamId: 100,
+    muteParamId: 101,
   },
   {
     id: 'wired9',
@@ -238,6 +334,10 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     isWireless: false,
     defaultVolume: 70,
     defaultProfile: 'piano',
+    nodeId: 1,
+    objectId: OBJ_PATCH_MICS,
+    gainParamId: 200,
+    muteParamId: 201,
   },
   {
     id: 'wired10',
@@ -248,6 +348,10 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     isWireless: false,
     defaultVolume: 70,
     defaultProfile: 'guitar',
+    nodeId: 1,
+    objectId: OBJ_PATCH_MICS,
+    gainParamId: 300,
+    muteParamId: 301,
   },
   {
     id: 'wired11',
@@ -258,6 +362,10 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     isWireless: false,
     defaultVolume: 55,
     defaultProfile: 'drums',
+    nodeId: 1,
+    objectId: OBJ_PATCH_MICS,
+    gainParamId: 400,
+    muteParamId: 401,
   },
   {
     id: 'wired12',
@@ -268,5 +376,9 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     isWireless: false,
     defaultVolume: 52,
     defaultProfile: 'ambient',
+    nodeId: 1,
+    objectId: OBJ_PATCH_MICS,
+    gainParamId: 500,
+    muteParamId: 501,
   },
 ];

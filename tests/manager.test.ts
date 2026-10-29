@@ -132,3 +132,39 @@ test('manager: auto-pi fader rider logic (quiet voice, loud voice, and silence f
 
   manager.close();
 });
+
+test('manager: two-way concurrent synchronization when external AMX or iPad moves controls', () => {
+  const manager = new SoundManager({ mode: 'simulation', enableAutoPiLoop: false });
+
+  // Simulate incoming London DI packet from physical DSP:
+  // Someone pressed Mute for Kapula 1 on the AMX wall panel!
+  // Msg 0x88 (SET), Node 1, VD 3, Object 333 (WL Mixer [0x00, 0x01, 0x4D]), paramId 1 (Kapula 1 mute), val 1 (Muted)
+  const incomingMute = Buffer.from([
+    0x88, 0x00, 0x01, 0x03, 0x00, 0x01, 0x4d, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+  ]);
+
+  let micChangeEventReceived = false;
+  manager.on('mic_change', (ch: any) => {
+    if (ch.id === 'kapula1' && !ch.isOn) {
+      micChangeEventReceived = true;
+    }
+  });
+
+  // Inject incoming London DI packet
+  (manager as any).handleIncomingLondonDi(incomingMute);
+
+  assert.equal(manager.getChannel('kapula1')?.isOn, false);
+  assert.equal(micChangeEventReceived, true);
+
+  // Now simulate someone moving the fader on iPad Mika:
+  // Msg 0x8D (SET_PERCENT), Object 333, paramId 0 (Kapula 1 gain), val 85% = 55706 (0xD99A)
+  const incomingGain = Buffer.from([
+    0x8d, 0x00, 0x01, 0x03, 0x00, 0x01, 0x4d, 0x00, 0x00, 0x00, 0x00, 0xd9, 0x9a,
+  ]);
+
+  (manager as any).handleIncomingLondonDi(incomingGain);
+
+  assert.equal(manager.getChannel('kapula1')?.volumePercent, 85);
+
+  manager.close();
+});

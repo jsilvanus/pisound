@@ -39,6 +39,9 @@ export const DEFAULT_MIXES: AudioMixConfig[] = [
     hasMasterFader: true,
     defaultMasterVolume: 80,
     defaultEnabled: true,
+    nodeId: 1,
+    objectId: [0x00, 0x01, 0x04], // Mic Mixer (Obj 260)
+    masterParamId: 0,
   },
   {
     id: 'striimi',
@@ -47,6 +50,9 @@ export const DEFAULT_MIXES: AudioMixConfig[] = [
     hasMasterFader: true,
     defaultMasterVolume: 85,
     defaultEnabled: true,
+    nodeId: 1,
+    objectId: [0x00, 0x01, 0x4d], // WL Mixer (Obj 333)
+    masterParamId: 0,
   },
   {
     id: 'webradio',
@@ -55,6 +61,9 @@ export const DEFAULT_MIXES: AudioMixConfig[] = [
     hasMasterFader: true,
     defaultMasterVolume: 80,
     defaultEnabled: true,
+    nodeId: 1,
+    objectId: [0x00, 0x01, 0x68], // RADIO VOL block (Obj 360 in Audio Architect)
+    masterParamId: 0, // Gain is svID 0, Mute is svID 1
   },
 ];
 
@@ -302,7 +311,11 @@ export interface MicChannelConfig {
   channelIndex: number; // 0-based index in DSP mixer
   isWireless: boolean;
   defaultVolume: number; // 0-100%
-  defaultProfile?: InputProfileId;
+  defaultProfile?: InputProfileId | undefined;
+  nodeId?: number | undefined; // Soundweb London Node ID (default 1)
+  objectId?: number[] | undefined; // 3-byte Object ID (e.g. WL Mixer [0,1,0x4d], Mic Mixer [0,1,4])
+  gainParamId?: number | undefined; // Harman parameter ID for gain (svID = k * 100)
+  muteParamId?: number | undefined; // Harman parameter ID for mute (svID = k * 100 + 1)
 }
 
 export interface MicChannelState extends MicChannelConfig {

@@ -54,11 +54,11 @@ test('protocol: builds correct set mute packet', () => {
 });
 
 test('protocol: builds correct set gain percent packet', () => {
-  const packet = buildSetGainPercentPacket(0, 75); // Channel 0, 75%
+  const packet = buildSetGainPercentPacket(300, 75); // paramId 300, 75%
   const decoded = decodePacket(packet);
   assert.ok(decoded);
   assert.equal(decoded[0], MSG_SET_PERCENT);
-  assert.equal(decoded.readUInt16BE(7), 32); // paramId = 32 + 0
+  assert.equal(decoded.readUInt16BE(7), 300); // paramId
   const scaled = decoded.readUInt32BE(9);
   const percent = Math.round((scaled / 65536) * 100);
   assert.equal(percent, 75);
