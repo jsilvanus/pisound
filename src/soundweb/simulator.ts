@@ -33,6 +33,7 @@ export class SoundwebSimulator extends EventEmitter {
     if (!body) return false;
 
     const msgType = body[0];
+    const objId = body.subarray(4, 7);
     if (msgType === MSG_RECALL_PARAM_PRESET) {
       const presetId = body.readUInt32BE(1);
       this.emit('sim_preset', presetId);
@@ -40,12 +41,12 @@ export class SoundwebSimulator extends EventEmitter {
       const paramId = body.readUInt16BE(7);
       const val = body.readUInt32BE(9);
       const isMuted = val !== 0;
-      this.emit('sim_mute', { paramId, isMuted });
+      this.emit('sim_mute', { objId, paramId, isMuted });
     } else if (msgType === MSG_SET_PERCENT) {
       const paramId = body.readUInt16BE(7);
       const scaledVal = body.readUInt32BE(9);
       const volumePercent = Math.round((scaledVal / 65536) * 100);
-      this.emit('sim_volume', { paramId, volumePercent });
+      this.emit('sim_volume', { objId, paramId, volumePercent });
     }
 
     return true;

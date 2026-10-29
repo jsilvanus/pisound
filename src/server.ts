@@ -228,7 +228,13 @@ export function createServer(options: ServerOptions = {}): {
     }
   });
 
-  // 17. Multi-mix management: List all configured mixes and master levels
+  // 17. Reset all mixer parameters and channels to church defaults
+  app.post('/api/v1/reset', async () => {
+    const snapshot = manager.resetToDefaults();
+    return { ok: true, snapshot };
+  });
+
+  // 18. Multi-mix management: List all configured mixes and master levels
   app.get('/api/v1/mixes', async () => {
     return {
       mixes: manager.getMixes(),

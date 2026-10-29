@@ -169,6 +169,10 @@ export class SoundManager extends EventEmitter {
     return Array.from(this.mixMasterStates.values());
   }
 
+  public getMixMasterState(mixId: string): MixMasterState | undefined {
+    return this.mixMasterStates.get(mixId);
+  }
+
   public getMix(mixId: string): {
     config: AudioMixConfig;
     master: MixMasterState;
@@ -552,6 +556,78 @@ export class SoundManager extends EventEmitter {
     return preset;
   }
 
+  /**
+   * Resets all mixer parameters and channels to church default state:
+   * - Recalls BLU-100 Parameter Preset Group 2 (ID 2: Wireless Defaults -10 dB reference in flash).
+   * - Restores all channel sends back to their calibrated profile baseline volume (baseVolumePercent).
+   * - Restores channel mute states to default (Kapula 1, Saarna, Alttari unmuted; Parvi ambient only in stream; others muted).
+   * - Restores mix master levels (Sali 80%, Striimi 75%, WebRadio 85%, unmuted).
+   * - Synchronizes all channels and master outputs with the physical BLU-100 DSP.
+   */
+  public resetToDefaults(): SystemSoundSnapshot {
+    const now = new Date().toISOString();
+
+    // 1. Reset Mix Master States
+    for (const mix of this.mixConfigs.values()) {
+      const state = this.mixMasterStates.get(mix.id);
+      if (state) {
+        state.volumePercent = mix.defaultMasterVolume;
+        state.isMuted = false;
+        // Sync hardware master output if applicable (e.g. RADIO VOL Obj 360)
+        if (mix.id === 'webradio') {
+          const objId = Buffer.from(BSS_OBJECT_IDS.RADIO_VOL);
+          const gainPacket = buildSetGainPercentPacket(0, state.volumePercent, 1, objId);
+          this.soundweb.send(gainPacket);
+          const mutePacket = buildSetMutePacket(1, false, 1, objId);
+          this.soundweb.send(mutePacket);
+        }
+      }
+    }
+
+    // 2. Recall BLU-100 Hardware Preset 2 (Wireless Defaults: -10 dB reference gain)
+    const presetPacket = buildRecallPresetPacket(2);
+    this.soundweb.send(presetPacket);
+
+    // 3. Reset all channels to baseline
+    for (const ch of this.channels.values()) {
+      const profileDef = INPUT_PROFILES[ch.profile] || INPUT_PROFILES.speech;
+      const isDefaultOn = ch.id === 'kapula1' || ch.id === 'wired1' || ch.id === 'wired3';
+
+      ch.isOn = isDefaultOn;
+      ch.volumePercent = profileDef.defaultVolume;
+      ch.baseVolumePercent = profileDef.defaultVolume;
+      ch.lastChangedAt = now;
+
+      for (const mix of this.mixConfigs.values()) {
+        let enabled = mix.defaultEnabled;
+        let volumePercent = profileDef.defaultVolume;
+
+        // Specific church acoustic rule: Parvi ambient (wired12) never routes to Sali
+        if (ch.id === 'wired12' && mix.id === 'sali') {
+          enabled = false;
+          volumePercent = 0;
+        } else if (mix.id === 'sali') {
+          enabled = isDefaultOn;
+          volumePercent = profileDef.defaultVolume;
+        }
+
+        ch.mixes[mix.id] = { enabled, volumePercent };
+      }
+
+      // Sync physical DSP channel if object ID and param IDs exist
+      const { nodeId, objectId, gainParam, muteParam } = this.getChannelSendParams(ch);
+      const gainPacket = buildSetGainPercentPacket(gainParam, ch.volumePercent, nodeId, objectId);
+      this.soundweb.send(gainPacket);
+      const mutePacket = buildSetMutePacket(muteParam, !ch.isOn, nodeId, objectId);
+      this.soundweb.send(mutePacket);
+
+      this.emit('mic_change', ch);
+    }
+
+    this.emit('bulk_change', { action: 'reset', timestamp: now });
+    return this.getSnapshot();
+  }
+
   public close(): void {
     if (this.autoPiTimer) {
       clearInterval(this.autoPiTimer);
@@ -647,20 +723,24 @@ export class SoundManager extends EventEmitter {
     });
 
     if (this.soundweb instanceof SoundwebSimulator) {
-      this.soundweb.on('sim_mute', ({ paramId, isMuted }) => {
-        const ch = Array.from(this.channels.values()).find(
-          (c) => c.muteParamId === paramId || c.channelIndex === paramId
-        );
+      this.soundweb.on('sim_mute', ({ objId, paramId, isMuted }) => {
+        const ch = Array.from(this.channels.values()).find((c) => {
+          const chObj = c.objectId ? Buffer.from(c.objectId) : DEFAULT_OBJECT_ID;
+          const chMuteParam = c.muteParamId ?? paramIdForChannelMute(c.channelIndex);
+          return chObj.equals(objId) && chMuteParam === paramId;
+        });
         if (ch) {
           ch.isOn = !isMuted;
           ch.lastChangedAt = new Date().toISOString();
           this.emit('mic_change', ch);
         }
       });
-      this.soundweb.on('sim_volume', ({ paramId, volumePercent }) => {
-        const ch = Array.from(this.channels.values()).find(
-          (c) => c.gainParamId === paramId || c.channelIndex === paramId
-        );
+      this.soundweb.on('sim_volume', ({ objId, paramId, volumePercent }) => {
+        const ch = Array.from(this.channels.values()).find((c) => {
+          const chObj = c.objectId ? Buffer.from(c.objectId) : DEFAULT_OBJECT_ID;
+          const chGainParam = c.gainParamId ?? paramIdForChannelGain(c.channelIndex);
+          return chObj.equals(objId) && chGainParam === paramId;
+        });
         if (ch) {
           ch.volumePercent = volumePercent;
           ch.lastChangedAt = new Date().toISOString();
