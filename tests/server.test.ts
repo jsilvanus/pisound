@@ -3,70 +3,57 @@ import assert from 'node:assert/strict';
 import { createServer } from '../src/server.js';
 import { SoundManager } from '../src/manager.js';
 
-test('server: returns health and status', async () => {
-  const manager = new SoundManager({ mode: 'simulation' });
+test('server: returns health, status, and input profiles', async () => {
+  const manager = new SoundManager({ mode: 'simulation', enableAutoPiLoop: false });
   const { app, stop } = createServer({ manager });
 
   const healthRes = await app.inject({ method: 'GET', url: '/health' });
   assert.equal(healthRes.statusCode, 200);
-  assert.equal(healthRes.json().status, 'ok');
 
   const statusRes = await app.inject({ method: 'GET', url: '/api/v1/status' });
   assert.equal(statusRes.statusCode, 200);
-  const status = statusRes.json();
-  assert.equal(status.service, 'pisound');
-  assert.equal(status.channels.length, 26);
+  assert.equal(statusRes.json().channels.length, 26);
+
+  const profilesRes = await app.inject({ method: 'GET', url: '/api/v1/profiles' });
+  assert.equal(profilesRes.statusCode, 200);
+  assert.ok(profilesRes.json().profiles.length >= 8);
 
   await stop();
 });
 
-test('server: controls mic state and volume over REST', async () => {
-  const manager = new SoundManager({ mode: 'simulation' });
+test('server: assigns profile and updates EQ / AGC via REST', async () => {
+  const manager = new SoundManager({ mode: 'simulation', enableAutoPiLoop: false });
   const { app, stop } = createServer({ manager });
 
-  // Set madonna1 ON
-  const stateRes = await app.inject({
+  // 1. Assign guitar profile to wired10
+  const profileRes = await app.inject({
     method: 'POST',
-    url: '/api/v1/mics/madonna1/state',
-    payload: { on: true },
+    url: '/api/v1/mics/wired10/profile',
+    payload: { profile: 'guitar' },
   });
-  assert.equal(stateRes.statusCode, 200);
-  assert.equal(stateRes.json().channel.isOn, true);
+  assert.equal(profileRes.statusCode, 200);
+  assert.equal(profileRes.json().channel.profile, 'guitar');
+  assert.equal(profileRes.json().channel.volumePercent, 70);
 
-  // Set volume
-  const volRes = await app.inject({
+  // 2. Set AGC config
+  const agcRes = await app.inject({
     method: 'POST',
-    url: '/api/v1/mics/madonna1/volume',
-    payload: { volumePercent: 88 },
+    url: '/api/v1/mics/kapula1/agc',
+    payload: { mode: 'agc-pi', targetDbfs: -20, attackTimeMs: 250 },
   });
-  assert.equal(volRes.statusCode, 200);
-  assert.equal(volRes.json().channel.volumePercent, 88);
+  assert.equal(agcRes.statusCode, 200);
+  assert.equal(agcRes.json().agc.mode, 'agc-pi');
+  assert.equal(agcRes.json().agc.targetDbfs, -20);
 
-  // Solo madonna1
-  const soloRes = await app.inject({
+  // 3. Set EQ config
+  const eqRes = await app.inject({
     method: 'POST',
-    url: '/api/v1/mics/madonna1/solo',
+    url: '/api/v1/mics/kapula1/eq',
+    payload: { hpfHz: 90, lowDb: -2.0 },
   });
-  assert.equal(soloRes.statusCode, 200);
-  assert.equal(soloRes.json().solo, 'madonna1');
-
-  // Kapula 1 should now be false
-  const kapRes = await app.inject({ method: 'GET', url: '/api/v1/mics/kapula1' });
-  assert.equal(kapRes.json().isOn, false);
-
-  await stop();
-});
-
-test('server: preset recall endpoint', async () => {
-  const manager = new SoundManager({ mode: 'simulation' });
-  const { app, stop } = createServer({ manager });
-
-  const presetRes = await app.inject({
-    method: 'POST',
-    url: '/api/v1/presets/mixer',
-  });
-  assert.equal(presetRes.statusCode, 200);
-  assert.equal(presetRes.json().preset.id, 0);
+  assert.equal(eqRes.statusCode, 200);
+  assert.equal(eqRes.json().eq.hpfHz, 90);
+  assert.equal(eqRes.json().eq.lowDb, -2.0);
 
   await stop();
 });

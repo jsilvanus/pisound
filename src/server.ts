@@ -1,6 +1,13 @@
 import fastify, { type FastifyInstance } from 'fastify';
 import { SoundManager } from './manager.js';
-import type { MicGroup, RoutingPresetKey } from './types.js';
+import {
+  INPUT_PROFILES,
+  type AgcConfig,
+  type ChannelEqState,
+  type InputProfileId,
+  type MicGroup,
+  type RoutingPresetKey,
+} from './types.js';
 
 export interface ServerOptions {
   port?: number;
@@ -39,7 +46,12 @@ export function createServer(options: ServerOptions = {}): {
     return manager.getSnapshot();
   });
 
-  // 3. List microphones (optionally filtered by ?group= or ?wireless=true/false)
+  // 3. List available input profiles
+  app.get('/api/v1/profiles', async () => {
+    return { profiles: Object.values(INPUT_PROFILES) };
+  });
+
+  // 4. List microphones (optionally filtered by ?group= or ?wireless=true/false)
   app.get<{ Querystring: { group?: string; wireless?: string } }>('/api/v1/mics', async (req) => {
     let list = manager.getAllChannels();
     if (req.query.group) {
@@ -52,7 +64,7 @@ export function createServer(options: ServerOptions = {}): {
     return { count: list.length, channels: list };
   });
 
-  // 4. Get single microphone state
+  // 5. Get single microphone state
   app.get<{ Params: { id: string } }>('/api/v1/mics/:id', async (req, reply) => {
     const ch = manager.getChannel(req.params.id);
     if (!ch) {
@@ -61,7 +73,7 @@ export function createServer(options: ServerOptions = {}): {
     return ch;
   });
 
-  // 5. Set mic state (ON / OFF)
+  // 6. Set mic state (ON / OFF)
   app.post<{ Params: { id: string }; Body: { on: boolean } }>('/api/v1/mics/:id/state', async (req, reply) => {
     if (typeof req.body?.on !== 'boolean') {
       return reply.status(400).send({ error: "Missing boolean field 'on'" });
@@ -75,7 +87,7 @@ export function createServer(options: ServerOptions = {}): {
     }
   });
 
-  // 6. Toggle mic state
+  // 7. Toggle mic state
   app.post<{ Params: { id: string } }>('/api/v1/mics/:id/toggle', async (req, reply) => {
     try {
       const updated = manager.toggleMic(req.params.id);
@@ -86,7 +98,7 @@ export function createServer(options: ServerOptions = {}): {
     }
   });
 
-  // 7. Solo mic (Turns ON target, mutes all others in group/wireless)
+  // 8. Solo mic
   app.post<{ Params: { id: string } }>('/api/v1/mics/:id/solo', async (req, reply) => {
     try {
       const updated = manager.soloMic(req.params.id);
@@ -97,7 +109,7 @@ export function createServer(options: ServerOptions = {}): {
     }
   });
 
-  // 8. Set mic volume
+  // 9. Set mic volume (fader)
   app.post<{ Params: { id: string }; Body: { volumePercent: number } }>('/api/v1/mics/:id/volume', async (req, reply) => {
     if (typeof req.body?.volumePercent !== 'number') {
       return reply.status(400).send({ error: "Missing numeric field 'volumePercent'" });
@@ -111,7 +123,64 @@ export function createServer(options: ServerOptions = {}): {
     }
   });
 
-  // 9. Bulk mute group
+  // 10. Assign input profile to mic (e.g. speech, vocal, guitar, piano, choir, organ, drums)
+  app.post<{ Params: { id: string }; Body: { profile: InputProfileId } }>('/api/v1/mics/:id/profile', async (req, reply) => {
+    if (!req.body?.profile) {
+      return reply.status(400).send({ error: "Missing string field 'profile'" });
+    }
+    try {
+      const updated = manager.setChannelProfile(req.params.id, req.body.profile);
+      return { ok: true, channel: updated };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return reply.status(400).send({ error: message });
+    }
+  });
+
+  // 11. Get & Set AGC settings for a mic
+  app.get<{ Params: { id: string } }>('/api/v1/mics/:id/agc', async (req, reply) => {
+    const ch = manager.getChannel(req.params.id);
+    if (!ch) return reply.status(404).send({ error: `Microphone '${req.params.id}' not found` });
+    return { id: ch.id, name: ch.name, agc: ch.agc };
+  });
+
+  app.post<{ Params: { id: string }; Body: Partial<AgcConfig> }>('/api/v1/mics/:id/agc', async (req, reply) => {
+    try {
+      const updated = manager.setChannelAgc(req.params.id, req.body || {});
+      return { ok: true, id: updated.id, agc: updated.agc };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return reply.status(400).send({ error: message });
+    }
+  });
+
+  // 12. Get & Set EQ settings for a mic
+  app.get<{ Params: { id: string } }>('/api/v1/mics/:id/eq', async (req, reply) => {
+    const ch = manager.getChannel(req.params.id);
+    if (!ch) return reply.status(404).send({ error: `Microphone '${req.params.id}' not found` });
+    return { id: ch.id, name: ch.name, eq: ch.eq };
+  });
+
+  app.post<{ Params: { id: string }; Body: Partial<ChannelEqState> }>('/api/v1/mics/:id/eq', async (req, reply) => {
+    try {
+      const updated = manager.setChannelEq(req.params.id, req.body || {});
+      return { ok: true, id: updated.id, eq: updated.eq };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return reply.status(400).send({ error: message });
+    }
+  });
+
+  // 13. Update live meter (e.g. from telemetry ingestion)
+  app.post<{ Params: { id: string }; Body: { peakDbfs: number } }>('/api/v1/mics/:id/meter', async (req, reply) => {
+    if (typeof req.body?.peakDbfs !== 'number') {
+      return reply.status(400).send({ error: "Missing numeric field 'peakDbfs'" });
+    }
+    manager.updateChannelMeter(req.params.id, req.body.peakDbfs);
+    return { ok: true, id: req.params.id, peakDbfs: req.body.peakDbfs };
+  });
+
+  // 14. Bulk mute group
   app.post<{ Params: { group: string } }>('/api/v1/groups/:group/mute-all', async (req, reply) => {
     const validGroups = ['handheld', 'madonna', 'wired', 'wireless', 'all'];
     if (!validGroups.includes(req.params.group)) {
@@ -121,7 +190,7 @@ export function createServer(options: ServerOptions = {}): {
     return { ok: true, group: req.params.group, action: 'muted_all' };
   });
 
-  // 10. Bulk unmute group
+  // 15. Bulk unmute group
   app.post<{ Params: { group: string } }>('/api/v1/groups/:group/unmute-all', async (req, reply) => {
     const validGroups = ['handheld', 'madonna', 'wired', 'wireless', 'all'];
     if (!validGroups.includes(req.params.group)) {
@@ -131,7 +200,7 @@ export function createServer(options: ServerOptions = {}): {
     return { ok: true, group: req.params.group, action: 'unmuted_all' };
   });
 
-  // 11. Recall preset
+  // 16. Recall preset
   app.post<{ Params: { preset: string } }>('/api/v1/presets/:preset', async (req, reply) => {
     const pStr = req.params.preset;
     const asNum = parseInt(pStr, 10);
@@ -146,7 +215,7 @@ export function createServer(options: ServerOptions = {}): {
     }
   });
 
-  // 12. Server-Sent Events (SSE) stream for live updates
+  // 17. Server-Sent Events (SSE) stream for live updates
   app.get('/api/v1/events', (req, reply) => {
     reply.raw.setHeader('Content-Type', 'text/event-stream');
     reply.raw.setHeader('Cache-Control', 'no-cache');

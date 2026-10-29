@@ -4,6 +4,242 @@
 
 export type MicGroup = 'handheld' | 'madonna' | 'wired';
 
+export type InputProfileId =
+  | 'speech'
+  | 'vocal'
+  | 'guitar'
+  | 'piano'
+  | 'choir'
+  | 'organ'
+  | 'drums'
+  | 'ambient'
+  | 'custom';
+
+export interface ChannelEqState {
+  hpfEnabled: boolean;
+  hpfHz: number; // e.g. 40 - 100 Hz
+  lowDb: number; // -12 .. +12 dB
+  midHz: number; // e.g. 800 - 3500 Hz
+  midDb: number; // -12 .. +12 dB
+  highDb: number; // -12 .. +12 dB
+  isBypassed: boolean;
+}
+
+export type AgcMode = 'none' | 'agc-pi' | 'agc-blu';
+
+export interface AgcConfig {
+  mode: AgcMode;
+  targetDbfs: number; // Target perceived loudness, e.g. -22 dBFS
+  attackTimeMs: number; // Speed of reducing loud voices, e.g. 300 ms
+  decayTimeMs: number; // Speed of boosting quiet voices, e.g. 1500 ms
+  holdTimeMs: number; // Time to freeze before decaying after voice stops, e.g. 800 ms
+  noiseGateThresholdDbfs: number; // Noise floor threshold below which rider freezes, e.g. -42 dBFS
+  maxBoostDb: number; // Maximum gain boost clamp, e.g. +6 dB (feedback guard)
+  maxCutDb: number; // Maximum cut clamp, e.g. -10 dB
+}
+
+export interface InputProfileDefinition {
+  id: InputProfileId;
+  name: string;
+  description: string;
+  defaultVolume: number; // 0..100%
+  defaultEq: ChannelEqState;
+  defaultAgc: AgcConfig;
+}
+
+export const DEFAULT_AGC_CONFIG: AgcConfig = {
+  mode: 'none',
+  targetDbfs: -22,
+  attackTimeMs: 300,
+  decayTimeMs: 1500,
+  holdTimeMs: 800,
+  noiseGateThresholdDbfs: -42,
+  maxBoostDb: 6,
+  maxCutDb: 10,
+};
+
+export const INPUT_PROFILES: Record<InputProfileId, InputProfileDefinition> = {
+  speech: {
+    id: 'speech',
+    name: 'Puhe (Speech)',
+    description: 'Pappi, lukija, liturgia, saarna. Auto-leveler aktiivinen, HPF 80 Hz.',
+    defaultVolume: 75,
+    defaultEq: {
+      hpfEnabled: true,
+      hpfHz: 80,
+      lowDb: -1.0,
+      midHz: 3000,
+      midDb: 2.0,
+      highDb: 0.0,
+      isBypassed: false,
+    },
+    defaultAgc: {
+      ...DEFAULT_AGC_CONFIG,
+      mode: 'agc-pi',
+      targetDbfs: -22,
+      maxBoostDb: 6,
+      maxCutDb: 10,
+    },
+  },
+  vocal: {
+    id: 'vocal',
+    name: 'Yksinlaulu (Vocal Solo)',
+    description: 'Solisti, kanttori. Pehmeä tasonsäätö, HPF 60 Hz.',
+    defaultVolume: 72,
+    defaultEq: {
+      hpfEnabled: true,
+      hpfHz: 60,
+      lowDb: 0.0,
+      midHz: 2500,
+      midDb: 1.5,
+      highDb: 1.0,
+      isBypassed: false,
+    },
+    defaultAgc: {
+      ...DEFAULT_AGC_CONFIG,
+      mode: 'agc-pi',
+      targetDbfs: -20,
+      attackTimeMs: 500,
+      decayTimeMs: 2000,
+      maxBoostDb: 4,
+      maxCutDb: 8,
+    },
+  },
+  guitar: {
+    id: 'guitar',
+    name: 'Kitara (Guitar)',
+    description: 'Akustinen kitara, DI-boksi. Dynaaminen sointi, HPF 50 Hz.',
+    defaultVolume: 70,
+    defaultEq: {
+      hpfEnabled: true,
+      hpfHz: 50,
+      lowDb: 1.0,
+      midHz: 800,
+      midDb: -2.0,
+      highDb: 1.5,
+      isBypassed: false,
+    },
+    defaultAgc: {
+      ...DEFAULT_AGC_CONFIG,
+      mode: 'none',
+    },
+  },
+  piano: {
+    id: 'piano',
+    name: 'Flyygeli / Piano',
+    description: 'Kuorin piano, koskettimet. Luonnollinen dynamiikka.',
+    defaultVolume: 70,
+    defaultEq: {
+      hpfEnabled: true,
+      hpfHz: 40,
+      lowDb: 0.0,
+      midHz: 1200,
+      midDb: 0.0,
+      highDb: 1.0,
+      isBypassed: false,
+    },
+    defaultAgc: {
+      ...DEFAULT_AGC_CONFIG,
+      mode: 'none',
+    },
+  },
+  choir: {
+    id: 'choir',
+    name: 'Kuoro (Choir)',
+    description: 'Kuoromikrofonit. Moniääninen laulu ilman kompressiopumppausta.',
+    defaultVolume: 68,
+    defaultEq: {
+      hpfEnabled: true,
+      hpfHz: 60,
+      lowDb: 0.0,
+      midHz: 2000,
+      midDb: 0.0,
+      highDb: 1.5,
+      isBypassed: false,
+    },
+    defaultAgc: {
+      ...DEFAULT_AGC_CONFIG,
+      mode: 'none',
+    },
+  },
+  organ: {
+    id: 'organ',
+    name: 'Urut (Organ)',
+    description: 'Pääurut ja positiivi. Täysi dynamiikka, ei leikkaa bassoa.',
+    defaultVolume: 62,
+    defaultEq: {
+      hpfEnabled: false,
+      hpfHz: 20,
+      lowDb: 0.0,
+      midHz: 1000,
+      midDb: 0.0,
+      highDb: 0.0,
+      isBypassed: true,
+    },
+    defaultAgc: {
+      ...DEFAULT_AGC_CONFIG,
+      mode: 'none',
+    },
+  },
+  drums: {
+    id: 'drums',
+    name: 'Rummut / Perkussiot',
+    description: 'Lyömäsoittimet, cajon. Vaimennettu huippujen varalta.',
+    defaultVolume: 55,
+    defaultEq: {
+      hpfEnabled: true,
+      hpfHz: 40,
+      lowDb: 2.0,
+      midHz: 500,
+      midDb: -3.0,
+      highDb: 2.0,
+      isBypassed: false,
+    },
+    defaultAgc: {
+      ...DEFAULT_AGC_CONFIG,
+      mode: 'none',
+    },
+  },
+  ambient: {
+    id: 'ambient',
+    name: 'Tila / Seurakunta (Ambient)',
+    description: 'Akustiikka ja virsilaulu. Taustaääni lähetykseen.',
+    defaultVolume: 52,
+    defaultEq: {
+      hpfEnabled: true,
+      hpfHz: 80,
+      lowDb: -2.0,
+      midHz: 1500,
+      midDb: 0.0,
+      highDb: 0.0,
+      isBypassed: false,
+    },
+    defaultAgc: {
+      ...DEFAULT_AGC_CONFIG,
+      mode: 'none',
+    },
+  },
+  custom: {
+    id: 'custom',
+    name: 'Oma (Custom)',
+    description: 'Käyttäjän mukautettu säätö.',
+    defaultVolume: 75,
+    defaultEq: {
+      hpfEnabled: true,
+      hpfHz: 80,
+      lowDb: 0.0,
+      midHz: 1000,
+      midDb: 0.0,
+      highDb: 0.0,
+      isBypassed: false,
+    },
+    defaultAgc: {
+      ...DEFAULT_AGC_CONFIG,
+      mode: 'none',
+    },
+  },
+};
+
 export interface MicChannelConfig {
   id: string;
   name: string;
@@ -12,12 +248,18 @@ export interface MicChannelConfig {
   channelIndex: number; // 0-based index in DSP mixer
   isWireless: boolean;
   defaultVolume: number; // 0-100%
+  defaultProfile?: InputProfileId;
 }
 
 export interface MicChannelState extends MicChannelConfig {
   isOn: boolean; // true = unmuted / live, false = muted / off
-  volumePercent: number; // 0..100
+  volumePercent: number; // 0..100% (current active position)
+  baseVolumePercent: number; // Calibrated profile baseline
+  profile: InputProfileId;
+  eq: ChannelEqState;
+  agc: AgcConfig;
   signalPresent: boolean;
+  peakDbfs: number; // Instantaneous or RMS meter (-80 to 0)
   lastChangedAt: string;
 }
 
@@ -69,13 +311,5 @@ export interface SystemSoundSnapshot {
   activeWirelessCount: number;
   activeWiredCount: number;
   channels: MicChannelState[];
-  timestamp: string;
-}
-
-export interface SoundEventPayload {
-  event: 'mic_state' | 'volume' | 'preset' | 'status' | 'bulk';
-  channelId?: string;
-  group?: MicGroup | 'wireless' | 'all';
-  data: unknown;
   timestamp: string;
 }

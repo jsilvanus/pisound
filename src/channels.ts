@@ -1,10 +1,7 @@
 import type { MicChannelConfig } from './types.js';
 
 /**
- * Riihimäen Keskuskirkko audio input channel inventory.
- * - Wireless 1-4: Handheld microphones (Kapula 1-4)
- * - Wireless 5-14: Headset / Earset microphones (Madonna 1-10)
- * - Wired 1-12+: Sanctuary fixed microphones and tie lines
+ * Riihimäen Keskuskirkko audio input channel inventory with default profiles.
  */
 export const DEFAULT_CHANNELS: MicChannelConfig[] = [
   // --- Wireless 1-4: Handheld microphones (Kapula 1-4) ---
@@ -16,6 +13,7 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     channelIndex: 0,
     isWireless: true,
     defaultVolume: 75,
+    defaultProfile: 'speech',
   },
   {
     id: 'kapula2',
@@ -25,6 +23,7 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     channelIndex: 1,
     isWireless: true,
     defaultVolume: 75,
+    defaultProfile: 'speech',
   },
   {
     id: 'kapula3',
@@ -34,6 +33,7 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     channelIndex: 2,
     isWireless: true,
     defaultVolume: 75,
+    defaultProfile: 'speech',
   },
   {
     id: 'kapula4',
@@ -43,6 +43,7 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     channelIndex: 3,
     isWireless: true,
     defaultVolume: 75,
+    defaultProfile: 'speech',
   },
 
   // --- Wireless 5-14: Headset / Earset microphones (Madonna 1-10) ---
@@ -54,6 +55,7 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     channelIndex: 4,
     isWireless: true,
     defaultVolume: 80,
+    defaultProfile: 'speech',
   },
   {
     id: 'madonna2',
@@ -63,6 +65,7 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     channelIndex: 5,
     isWireless: true,
     defaultVolume: 80,
+    defaultProfile: 'speech',
   },
   {
     id: 'madonna3',
@@ -72,6 +75,7 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     channelIndex: 6,
     isWireless: true,
     defaultVolume: 80,
+    defaultProfile: 'vocal',
   },
   {
     id: 'madonna4',
@@ -81,6 +85,7 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     channelIndex: 7,
     isWireless: true,
     defaultVolume: 80,
+    defaultProfile: 'speech',
   },
   {
     id: 'madonna5',
@@ -90,6 +95,7 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     channelIndex: 8,
     isWireless: true,
     defaultVolume: 80,
+    defaultProfile: 'speech',
   },
   {
     id: 'madonna6',
@@ -99,6 +105,7 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     channelIndex: 9,
     isWireless: true,
     defaultVolume: 80,
+    defaultProfile: 'speech',
   },
   {
     id: 'madonna7',
@@ -108,6 +115,7 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     channelIndex: 10,
     isWireless: true,
     defaultVolume: 80,
+    defaultProfile: 'speech',
   },
   {
     id: 'madonna8',
@@ -117,6 +125,7 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     channelIndex: 11,
     isWireless: true,
     defaultVolume: 80,
+    defaultProfile: 'speech',
   },
   {
     id: 'madonna9',
@@ -126,6 +135,7 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     channelIndex: 12,
     isWireless: true,
     defaultVolume: 80,
+    defaultProfile: 'speech',
   },
   {
     id: 'madonna10',
@@ -135,6 +145,7 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     channelIndex: 13,
     isWireless: true,
     defaultVolume: 80,
+    defaultProfile: 'speech',
   },
 
   // --- Wired Microphones (1-12) ---
@@ -146,6 +157,7 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     channelIndex: 14,
     isWireless: false,
     defaultVolume: 70,
+    defaultProfile: 'speech',
   },
   {
     id: 'wired2',
@@ -155,6 +167,7 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     channelIndex: 15,
     isWireless: false,
     defaultVolume: 70,
+    defaultProfile: 'speech',
   },
   {
     id: 'wired3',
@@ -164,6 +177,7 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     channelIndex: 16,
     isWireless: false,
     defaultVolume: 75,
+    defaultProfile: 'speech',
   },
   {
     id: 'wired4',
@@ -173,6 +187,7 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     channelIndex: 17,
     isWireless: false,
     defaultVolume: 75,
+    defaultProfile: 'speech',
   },
   {
     id: 'wired5',
@@ -182,6 +197,7 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     channelIndex: 18,
     isWireless: false,
     defaultVolume: 70,
+    defaultProfile: 'choir',
   },
   {
     id: 'wired6',
@@ -191,6 +207,7 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     channelIndex: 19,
     isWireless: false,
     defaultVolume: 70,
+    defaultProfile: 'choir',
   },
   {
     id: 'wired7',
@@ -199,7 +216,8 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     group: 'wired',
     channelIndex: 20,
     isWireless: false,
-    defaultVolume: 65,
+    defaultVolume: 62,
+    defaultProfile: 'organ',
   },
   {
     id: 'wired8',
@@ -208,7 +226,8 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     group: 'wired',
     channelIndex: 21,
     isWireless: false,
-    defaultVolume: 65,
+    defaultVolume: 62,
+    defaultProfile: 'organ',
   },
   {
     id: 'wired9',
@@ -218,32 +237,36 @@ export const DEFAULT_CHANNELS: MicChannelConfig[] = [
     channelIndex: 22,
     isWireless: false,
     defaultVolume: 70,
+    defaultProfile: 'piano',
   },
   {
     id: 'wired10',
     name: 'Lattiarasia 1 (AV09)',
-    role: 'Kuorin lattiarasia (Pulpetti/soitin)',
+    role: 'Kuorin lattiarasia (Kitara / Pulpetti)',
     group: 'wired',
     channelIndex: 23,
     isWireless: false,
     defaultVolume: 70,
+    defaultProfile: 'guitar',
   },
   {
     id: 'wired11',
     name: 'Lattiarasia 2 (AV10)',
-    role: 'Kuorin lattiarasia (Bändi/vieras)',
+    role: 'Kuorin lattiarasia (Bändi / Rummut)',
     group: 'wired',
     channelIndex: 24,
     isWireless: false,
-    defaultVolume: 70,
+    defaultVolume: 55,
+    defaultProfile: 'drums',
   },
   {
     id: 'wired12',
     name: 'Lattiarasia 3 (Parvi)',
-    role: 'Parven lattiarasia (Lisäsoittimet)',
+    role: 'Parven lattiarasia (Akustiikka / Tila)',
     group: 'wired',
     channelIndex: 25,
     isWireless: false,
-    defaultVolume: 70,
+    defaultVolume: 52,
+    defaultProfile: 'ambient',
   },
 ];

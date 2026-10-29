@@ -1,114 +1,61 @@
 # pisound Contract & API Specification
 
-`pisound` is the dedicated sound and microphone controller service in the Raspberry Pi AV production ecosystem. It interfaces with the **BSS Soundweb London BLU-100** DSP over **Harman HiQnet London Direct Inject (London DI)** TCP port 1023.
+`pisound` is the dedicated sound, microphone, and auto-leveling controller service in the Raspberry Pi AV production ecosystem. It interfaces with the **BSS Soundweb London BLU-100** DSP over **Harman HiQnet London Direct Inject (London DI)** TCP port 1023.
 
 ---
 
 ## 1. Network & Port Allocations
 
 * **Default Service Port**: `3300` (HTTP REST & SSE)
-* **Default Host**: `0.0.0.0` (binds to all interfaces)
-* **BSS Soundweb DSP Target**: `192.168.1.30:1023` (configurable via `PISOUND_SOUNDWEB_HOST` and `PISOUND_SOUNDWEB_PORT`)
-* **Mode**: `simulation` (default for offline dev) or `production` (live DSP connection)
+* **Default Host**: `0.0.0.0`
+* **BSS Soundweb DSP Target**: `192.168.1.30:1023`
+* **Mode**: `simulation` (default) or `production`
 
 ---
 
-## 2. Microphone Channel Matrix
+## 2. Input Profiles & Auto-Leveling (AGC)
 
-| ID | Name | Role | Group | Wireless? | Default Vol |
-|---|---|---|---|---|---|
-| `kapula1` | Kapula 1 | Liturgi / Pappi | `handheld` | Yes | 75% |
-| `kapula2` | Kapula 2 | Kanttori / Avustaja | `handheld` | Yes | 75% |
-| `kapula3` | Kapula 3 | Lukija / Tekstinlukija | `handheld` | Yes | 75% |
-| `kapula4` | Kapula 4 | Vierailija / Yleisö / Varakapula | `handheld` | Yes | 75% |
-| `madonna1` | Madonna 1 | Päämadonna / Saarnaaja | `madonna` | Yes | 80% |
-| `madonna2` | Madonna 2 | Liturgi (Headset) | `madonna` | Yes | 80% |
-| `madonna3` | Madonna 3 | Kanttori / Solisti | `madonna` | Yes | 80% |
-| `madonna4` | Madonna 4 | Avustaja 1 / Esiintyjä | `madonna` | Yes | 80% |
-| `madonna5` | Madonna 5 | Avustaja 2 / Esiintyjä | `madonna` | Yes | 80% |
-| `madonna6` | Madonna 6 | Esiintyjä / Näytelmä | `madonna` | Yes | 80% |
-| `madonna7` | Madonna 7 | Esiintyjä / Näytelmä | `madonna` | Yes | 80% |
-| `madonna8` | Madonna 8 | Esiintyjä / Näytelmä | `madonna` | Yes | 80% |
-| `madonna9` | Madonna 9 | Esiintyjä / Näytelmä | `madonna` | Yes | 80% |
-| `madonna10` | Madonna 10 | Esiintyjä / Varamadonna | `madonna` | Yes | 80% |
-| `wired1` | Alttari Vasen | Alttaripöytä (Vasen) | `wired` | No | 70% |
-| `wired2` | Alttari Oikea | Alttaripöytä (Oikea) | `wired` | No | 70% |
-| `wired3` | Lukupulpetti | Ambo / Lukupulpetti | `wired` | No | 75% |
-| `wired4` | Saarnatuoli | Saarnatuoli | `wired` | No | 75% |
-| `wired5` | Kuoro Vasen | Kuoromikrofoni Vasen | `wired` | No | 70% |
-| `wired6` | Kuoro Oikea | Kuoromikrofoni Oikea | `wired` | No | 70% |
-| `wired7` | Urut Positiivi | Positiiviurut | `wired` | No | 65% |
-| `wired8` | Urut Pääurut | Pääurut | `wired` | No | 65% |
-| `wired9` | Flyygeli | Flyygeli / Piano | `wired` | No | 70% |
-| `wired10` | Lattiarasia 1 | Kuorin lattiarasia AV09 | `wired` | No | 70% |
-| `wired11` | Lattiarasia 2 | Kuorin lattiarasia AV10 | `wired` | No | 70% |
-| `wired12` | Lattiarasia 3 | Parven lattiarasia | `wired` | No | 70% |
+Every microphone channel has an assigned **Input Profile**:
+* `speech` (Puhe): 75% fader, `agc-pi` active (-22 dBFS target), HPF 80 Hz ON, Mid +2.0 dB at 3.0 kHz.
+* `vocal` (Yksinlaulu): 72% fader, `agc-pi` active (-20 dBFS target), HPF 60 Hz ON, Mid +1.5 dB.
+* `guitar` (Kitara): 70% fader, AGC off, HPF 50 Hz ON, Low +1.0 dB, Mid -2.0 dB at 800 Hz.
+* `piano` (Flyygeli): 70% fader, AGC off, HPF 40 Hz ON.
+* `choir` (Kuoro): 68% fader, AGC off, HPF 60 Hz ON.
+* `organ` (Urut): 62% fader, AGC off, HPF bypassed (full sub-bass preservation).
+* `drums` (Rummut): 55% fader, AGC off, HPF 40 Hz ON, padded for loud peaks.
+* `ambient` (Tila/Virsi): 52% fader, AGC off, HPF 80 Hz ON.
+* `custom`: User-defined fader, EQ, and AGC values.
+
+### AGC Modes
+* `none`: Fixed manual fader.
+* `agc-pi`: Intelligent Pi Fader Rider loop (100 ms cadence, noise-gate freeze, configurable attack/decay/hold, feedback guard clamp).
+* `agc-blu`: BSS BLU-100 internal DSP hardware AGC block.
 
 ---
 
-## 3. Presets
+## 3. REST Endpoints
 
-* `normal` (ID `1`): **WL Normaali (Automixer)** — Normal church service mode. Mics mix automatically to sanctuary speakers.
-* `mixer` (ID `0`): **WL Mikseriin (SQ-5)** — Routes wireless microphones to the FOH mixing console.
-* `open` (ID `3`): **Audio Open** — System startup state (unmutes main outputs).
-* `mute` (ID `4`): **Audio Mute** — System shutdown state (mutes main outputs).
+### Core Endpoints
+* `GET /health`: Health status.
+* `GET /api/v1/status`: Complete snapshot of all 26 mics, active preset, profiles, and AGC.
+* `GET /api/v1/profiles`: List all profile presets.
+* `GET /api/v1/mics`: List microphones (with `?group=` or `?wireless=` filter).
+* `GET /api/v1/mics/:id`: Single mic state.
 
----
+### Channel Control
+* `POST /api/v1/mics/:id/state`: `{ "on": true | false }` (Mute / Unmute)
+* `POST /api/v1/mics/:id/toggle`: Toggle state
+* `POST /api/v1/mics/:id/solo`: Solo this mic (mutes other wireless mics)
+* `POST /api/v1/mics/:id/volume`: `{ "volumePercent": 0..100 }` (Adjust fader)
+* `POST /api/v1/mics/:id/profile`: `{ "profile": "speech" | "vocal" | "guitar" | ... }`
+* `GET /api/v1/mics/:id/agc`: Get AGC configuration
+* `POST /api/v1/mics/:id/agc`: `{ "mode": "none" | "agc-pi" | "agc-blu", "targetDbfs": -22, "attackTimeMs": 300, ... }`
+* `GET /api/v1/mics/:id/eq`: Get EQ state
+* `POST /api/v1/mics/:id/eq`: `{ "hpfEnabled": true, "hpfHz": 80, "lowDb": 0, "midHz": 2500, "midDb": 1.5, "highDb": 0 }`
+* `POST /api/v1/mics/:id/meter`: `{ "peakDbfs": -24 }` (Update live audio meter)
 
-## 4. REST Endpoints
-
-### `GET /health`
-Returns `{ "status": "ok", "service": "pisound" }`.
-
-### `GET /api/v1/status`
-Returns full system snapshot:
-```json
-{
-  "service": "pisound",
-  "status": "connected",
-  "host": "192.168.1.30",
-  "port": 1023,
-  "mode": "production",
-  "currentPreset": { "id": 1, "key": "normal", "name": "WL Normaali (Automixer)" },
-  "activeWirelessCount": 1,
-  "activeWiredCount": 2,
-  "channels": [ ... ],
-  "timestamp": "2026-10-29T10:00:00.000Z"
-}
-```
-
-### `GET /api/v1/mics?group=handheld&wireless=true`
-Lists channels, optionally filtered by group or wireless flag.
-
-### `GET /api/v1/mics/:id`
-Returns state of a single microphone channel.
-
-### `POST /api/v1/mics/:id/state`
-Body: `{ "on": true | false }`
-Sets mic state (unmuted or muted).
-
-### `POST /api/v1/mics/:id/toggle`
-Toggles between ON and MUTED.
-
-### `POST /api/v1/mics/:id/solo`
-Unmutes this microphone and mutes all other wireless microphones.
-
-### `POST /api/v1/mics/:id/volume`
-Body: `{ "volumePercent": 0..100 }`
-Adjusts gain/volume fader.
-
-### `POST /api/v1/groups/:group/mute-all`
-Groups: `handheld`, `madonna`, `wired`, `wireless`, `all`.
-
-### `POST /api/v1/groups/:group/unmute-all`
-Bulk unmutes the group.
-
-### `POST /api/v1/presets/:preset`
-Preset: `normal`, `mixer`, `open`, `mute`, or numeric ID (`0`, `1`, `3`, `4`).
-
-### `GET /api/v1/events`
-Server-Sent Events (SSE) stream pushing events:
-* `snapshot`: full initial state
-* `mic_change`: updated channel object
-* `preset_change`: updated preset object
-* `bulk_change`: bulk action summary
+### Group & Preset Controls
+* `POST /api/v1/groups/:group/mute-all`: `handheld`, `madonna`, `wired`, `wireless`, `all`
+* `POST /api/v1/groups/:group/unmute-all`: Bulk unmute
+* `POST /api/v1/presets/:preset`: `normal`, `mixer`, `open`, `mute`, or ID
+* `GET /api/v1/events`: Server-Sent Events (SSE) stream

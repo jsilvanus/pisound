@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-import { parseArgs } from 'node:util';
-import type { MicChannelState, SystemSoundSnapshot } from './types.js';
+import type { InputProfileDefinition, MicChannelState, SystemSoundSnapshot } from './types.js';
 
 const API_BASE = process.env.PISOUND_API_URL || 'http://127.0.0.1:3300';
 
@@ -36,16 +35,24 @@ function printStatusTable(snapshot: SystemSoundSnapshot): void {
 
   const printGroup = (title: string, mics: MicChannelState[]) => {
     console.log(`\x1b[1m${title}\x1b[0m`);
-    console.log(`--------------------------------------------------------------------------------`);
+    console.log(`-----------------------------------------------------------------------------------------------`);
     for (const m of mics) {
       const stateBadge = m.isOn
         ? '\x1b[42m\x1b[30m PÄÄLLÄ (ON)  \x1b[0m'
         : '\x1b[41m\x1b[37m MYKISTETTY   \x1b[0m';
-      const volStr = `${m.volumePercent}%`.padStart(4);
-      const idStr = m.id.padEnd(11);
-      const nameStr = m.name.padEnd(16);
-      const roleStr = m.role;
-      console.log(`  ${idStr} ${nameStr} ${stateBadge}  Vol: ${volStr}  (${roleStr})`);
+      const volStr = `${m.volumePercent.toFixed(1)}%`.padStart(6);
+      const idStr = m.id.padEnd(10);
+      const nameStr = m.name.padEnd(15);
+      const profileStr = `[${m.profile}]`.padEnd(10);
+
+      let agcBadge = '\x1b[90mAGC:OFF\x1b[0m';
+      if (m.agc.mode === 'agc-pi') agcBadge = `\x1b[36mAGC:PI(${m.agc.targetDbfs}dB)\x1b[0m`;
+      else if (m.agc.mode === 'agc-blu') agcBadge = `\x1b[35mAGC:BLU\x1b[0m`;
+
+      const hpfStr = m.eq.hpfEnabled ? `HPF:${m.eq.hpfHz}Hz` : 'HPF:OFF';
+      const eqBadge = m.eq.isBypassed ? '\x1b[90mEQ:BYP\x1b[0m' : `\x1b[33mEQ(${hpfStr})\x1b[0m`;
+
+      console.log(`  ${idStr} ${nameStr} ${stateBadge}  Vol:${volStr}  ${profileStr}  ${agcBadge}  ${eqBadge}  (${m.role})`);
     }
     console.log();
   };
@@ -69,12 +76,23 @@ export async function runCli(): Promise<void> {
     return;
   }
 
+  if (command === 'profiles') {
+    const res = await fetchJson<{ profiles: InputProfileDefinition[] }>('/api/v1/profiles');
+    console.log(`\n\x1b[1m=== SAATAVILLA OLEVAT INPUT PROFIILIT ===\x1b[0m\n`);
+    for (const p of res.profiles) {
+      console.log(`  \x1b[1m\x1b[36m${p.id.padEnd(9)}\x1b[0m  \x1b[32m${p.name.padEnd(25)}\x1b[0m  Fader: ${p.defaultVolume}%  AGC: ${p.defaultAgc.mode}`);
+      console.log(`             HPF: ${p.defaultEq.hpfEnabled ? `${p.defaultEq.hpfHz}Hz` : 'OFF'} | Low: ${p.defaultEq.lowDb}dB | Mid: ${p.defaultEq.midHz}Hz (${p.defaultEq.midDb}dB) | High: ${p.defaultEq.highDb}dB`);
+      console.log(`             ${p.description}\n`);
+    }
+    return;
+  }
+
   if (command === 'mic') {
     const micId = args[1];
     const action = args[2];
 
     if (!micId) {
-      console.error(`Usage: pisound mic <mic-id> [on|off|toggle|solo|vol <0-100>]`);
+      console.error(`Usage: pisound mic <mic-id> [on|off|toggle|solo|vol <0-100>|profile <name>|agc <none|pi|blu>|eq]`);
       process.exit(1);
     }
 
@@ -120,7 +138,7 @@ export async function runCli(): Promise<void> {
     }
 
     if (action === 'vol' || action === 'volume') {
-      const volNum = parseInt(args[3] || '', 10);
+      const volNum = parseFloat(args[3] || '');
       if (isNaN(volNum) || volNum < 0 || volNum > 100) {
         console.error(`Invalid volume percentage: ${args[3]}. Must be 0..100.`);
         process.exit(1);
@@ -133,7 +151,42 @@ export async function runCli(): Promise<void> {
       return;
     }
 
-    console.error(`Unknown mic action: ${action}. Valid: on, off, toggle, solo, vol`);
+    if (action === 'profile') {
+      const profileName = args[3];
+      if (!profileName) {
+        console.error(`Usage: pisound mic <id> profile <speech|vocal|guitar|piano|choir|organ|drums|ambient|custom>`);
+        process.exit(1);
+      }
+      const res = await fetchJson<{ ok: boolean; channel: MicChannelState }>(`/api/v1/mics/${micId}/profile`, {
+        method: 'POST',
+        body: JSON.stringify({ profile: profileName }),
+      });
+      console.log(`\x1b[32m[OK]\x1b[0m ${res.channel.name} profile set to \x1b[1m\x1b[36m${res.channel.profile}\x1b[0m (Fader: ${res.channel.volumePercent}%, AGC: ${res.channel.agc.mode}, HPF: ${res.channel.eq.hpfHz}Hz)`);
+      return;
+    }
+
+    if (action === 'agc') {
+      const modeStr = args[3];
+      if (!['none', 'pi', 'blu', 'agc-pi', 'agc-blu'].includes(modeStr || '')) {
+        console.error(`Usage: pisound mic <id> agc <none|pi|blu>`);
+        process.exit(1);
+      }
+      const mappedMode = modeStr === 'pi' ? 'agc-pi' : modeStr === 'blu' ? 'agc-blu' : modeStr;
+      const res = await fetchJson<{ ok: boolean; id: string; agc: { mode: string } }>(`/api/v1/mics/${micId}/agc`, {
+        method: 'POST',
+        body: JSON.stringify({ mode: mappedMode }),
+      });
+      console.log(`\x1b[32m[OK]\x1b[0m ${micId} AGC mode set to \x1b[1m${res.agc.mode}\x1b[0m`);
+      return;
+    }
+
+    if (action === 'eq') {
+      const chEq = await fetchJson<{ id: string; eq: Record<string, unknown> }>(`/api/v1/mics/${micId}/eq`);
+      console.log(`EQ for ${micId}:`, chEq.eq);
+      return;
+    }
+
+    console.error(`Unknown mic action: ${action}. Valid: on, off, toggle, solo, vol, profile, agc, eq`);
     process.exit(1);
   }
 
@@ -141,7 +194,7 @@ export async function runCli(): Promise<void> {
     const sub = args[1];
     if (sub === 'mute-all' || sub === 'off') {
       await fetchJson('/api/v1/groups/wireless/mute-all', { method: 'POST' });
-      console.log(`\x1b[31m\x1b[1m[ALL WIRELESS MUTED]\x1b[0m All 14 wireless mics (Kapulat 1-4 & Madonnat 1-10) are now MUTED.`);
+      console.log(`\x1b[31m\x1b[1m[ALL WIRELESS MUTED]\x1b[0m All 14 wireless mics are now MUTED.`);
       return;
     }
     if (sub === 'all-on' || sub === 'on') {
@@ -169,13 +222,16 @@ export async function runCli(): Promise<void> {
   console.log(`pisound - Sound & Mic Controller CLI
 
 Usage:
-  pisound status                           Show full status table of all mics & presets
+  pisound status                           Show full status table of all mics, profiles & AGC
+  pisound profiles                         List all available input profiles with EQ & AGC settings
   pisound mic <id> on                      Turn on (unmute) a specific microphone
   pisound mic <id> off                     Mute a specific microphone
   pisound mic <id> toggle                  Toggle mic between on and off
   pisound mic <id> solo                    Solo mic (turns this on, mutes all other wireless)
   pisound mic <id> vol <0-100>             Set mic gain/volume percentage
-  pisound wireless mute-all                Instantly mute all wireless mics (Kapulat & Madonnat)
+  pisound mic <id> profile <name>          Assign profile (speech, vocal, guitar, piano, choir, organ, drums)
+  pisound mic <id> agc <none|pi|blu>       Set AGC auto-leveler mode
+  pisound wireless mute-all                Instantly mute all wireless mics
   pisound wireless all-on                  Unmute all wireless mics
   pisound preset <normal|mixer|open|mute>  Recall an audio routing preset
 `);
