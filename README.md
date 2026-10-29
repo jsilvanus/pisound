@@ -1,122 +1,125 @@
 # pisound
 
-Modern sound control application and protocol interface for **BSS Soundweb London (HiQnet)** and church audio systems, designed for mobile Android devices and the Raspberry Pi production ecosystem.
+Sound and microphone controller service and CLI for **BSS Soundweb London (HiQnet)**, built for the Raspberry Pi production ecosystem at **Riihimäen Keskuskirkko**.
 
-Developed for **Riihimäen Keskuskirkko** to replace deprecated legacy tools and provide responsive wireless control of microphone faders, mutes, zone volumes, and audio scene presets.
-
----
-
-## 1. Dante vs. HiQnet: What Are We Controlling?
-
-A common point of confusion in networked AV installations is the distinction between **Dante** and **HiQnet**:
-
-| Protocol / System | What It Does | Role in Church | Controllable via `pisound`? |
-|---|---|---|---|
-| **Dante** (Audinate) | **Audio Transport (AoIP)**: Transmits uncompressed digital audio streams over standard IP networks between devices. | Connects BSS BLU-DAN to Allen & Heath SQ-5, PC streaming interface, and subwoofer. | **No for live mixing** (Dante routes audio cables digitally, but does not have mic faders/mutes). |
-| **HiQnet / London DI** (Harman / BSS) | **Audio Control & DSP**: Controls faders, mutes, automixers, EQ, matrix gains, and scene presets over **TCP port 1023**. | Controls the **BSS Soundweb London BLU-100** DSP engine in the rack. | **YES — Primary Target!** Direct control of all church mic levels, mutes, and presets without credentials. |
-| **SQ Control Protocol** (Allen & Heath) | **Mixing Console Control**: MIDI over TCP on port 51325 for Allen & Heath digital consoles. | Controls the FOH SQ-5 console during concerts and band performances. | **Optional secondary target** for concert/musical modes. |
-
-> In short: **Dante carries the sound, but HiQnet controls the volume!** `pisound` targets the **HiQnet London Direct Inject** protocol on TCP port 1023 to control the BSS Soundweb London DSP.
+`pisound` bridges the church's **BSS Soundweb London BLU-100** audio DSP over TCP port 1023 (Harman London Direct Inject protocol) to provide clean REST/SSE APIs and a fast CLI for controlling:
+- **Wireless Handheld Mics 1–4** ("Kapula 1–4")
+- **Wireless Headset Mics 5–14** ("Madonna 1–10")
+- **Sanctuary Wired Mics 1–12+** (Altar, Lectern, Pulpit, Organ, Choir, Floor boxes)
+- **Audio Routing Presets** (Sanctuary automixer vs. SQ-5 live mixing console)
 
 ---
 
-## 2. Background & The Problem at Keskuskirkko
+## 1. Role in the Pi Production Ecosystem
 
-1. **Current Reality**: Day-to-day sound mixing during church services has required an operator on a Windows PC running Harman's bulky *HiQnet Audio Architect* desktop software.
-2. **Abandoned Mobile Tools**: Harman previously offered *HiQnet Motion Control* for iOS/Android, but the app is deprecated, unstable on modern Android versions, and difficult to customize.
-3. **Disconnected Touch Panels**: The legacy AMX touch panel in the church only supported 4 static presets and had its mic fader channels disconnected from the DSP in software.
-4. **The Goal of `pisound`**: A lightweight, fast, modern Android app (and optional Pi gateway bridge) allowing a pastor, cantor, sacristan, or technician to walk the church with a tablet/phone and:
-   - Adjust microphone levels on the fly.
-   - Instantly mute / unmute open microphones with high-visibility color tallies.
-   - Recall service scenes (e.g. *WL Normal / Jumalanpalvelus*, *WL to Mixer / Konsertti*, *Hiljainen*, *Audio Mute*).
-   - View live VU meters pushed directly from the DSP.
-
----
-
-## 3. Architecture & Data Flow
+`pisound` is the dedicated audio subsystem companion to `pimatrix` (video routing), `pitube` (YouTube broadcasts), `pilight` (tally lights), `pivoice` (speech telemetry), and `pigateway`:
 
 ```
-+-------------------------------------------------------------+
-|                     Android Tablet / Phone                  |
-|          pisound App (Kotlin + Jetpack Compose)             |
-+-------------------------------------------------------------+
-                              |
-                     Wi-Fi (Ubiquiti AP)
-                              |
-      +-----------------------+-----------------------+
-      | (Option A: Direct TCP)                        | (Option B: Pi Bridge)
-      v                                               v
-+-------------------------------+             +-------------------------------+
-|     BSS Soundweb London       |             |           pigateway           |
-|         BLU-100 DSP           |             |    (Raspberry Pi 5 Server)    |
-|      (TCP port 1023)          |             |  HTTP REST / SSE on :3100     |
-+-------------------------------+             +-------------------------------+
-      |                                               |
-  Controls Faders & Mutes                             | Translates to London DI
-      |                                               v
-+-------------------------------+             +-------------------------------+
-|  BLU-BIB (Inputs: Mics)       |             |     BSS Soundweb London       |
-|  BLU-BOB (Outputs: Amps)      |             |         BLU-100 DSP           |
-|  BLU-DAN (Dante to SQ-5 & PC) |             +-------------------------------+
-+-------------------------------+
-```
-
-### Protocol Overview (London DI)
-- **Transport**: Raw TCP socket on port `1023` to the BLU-100's IP address (`192.168.1.x`).
-- **Framing**: `0x02` (STX) ... `[Message Body]` ... `[XOR Checksum]` ... `0x03` (ETX).
-- **Escaped Bytes**: Special bytes (`0x02`, `0x03`, `0x06`, `0x15`, `0x1B`) escaped with `0x1B` + `(byte + 0x80)`.
-- **Subscriptions**: The app sends `0x8E` (Subscribe Percent) on startup; the DSP streams live feedback updates whenever any fader or meter moves.
-- See detailed protocol docs in [`docs/protocol-london-di.md`](docs/protocol-london-di.md).
-
----
-
-## 4. Channels & Functions
-
-Based on the confirmed rack configuration and NetLinx archives:
-
-### Microphone Channels
-- **Kapula 1**: Wireless Handheld Mic 1
-- **Kapula 2**: Wireless Handheld Mic 2
-- **Kapula 3**: Wireless Handheld Mic 3
-- **Solmio**: Wireless Lavalier / Lapel Mic
-- **Mic 1**: Altar / Lectern Mic
-- **Mic 2**: Pulpit (Saarnatuoli) Mic
-- **Mic 3**: Organ / Choir / Spare Mic
-
-### Parameter Presets
-- `Preset 0`: **WL to Mixer** (Directs wireless microphones to the FOH mixing console)
-- `Preset 1`: **WL Normal Use** (Automixer active, routes directly to sanctuary speaker zones)
-- `Preset 3`: **Audio Open** (Sanctuary audio output active)
-- `Preset 4`: **Audio Mute** (Master audio output muted)
-
----
-
-## 5. Repository Structure
-
-```
-pisound/
-├── docs/
-│   ├── protocol-london-di.md         # Full Harman HiQnet London DI packet spec
-│   └── keskuskirkko-audio-system.md  # Keskuskirkko audio hardware & rack signal chain
-├── android/                          # Android application (Kotlin / Jetpack Compose)
-│   ├── app/
-│   │   ├── src/main/java/org/keskuskirkko/pisound/
-│   │   │   ├── protocol/             # London DI framing, encoder/decoder, socket client
-│   │   │   ├── model/                # Channel strip, fader state, preset models
-│   │   │   ├── viewmodel/            # SoundViewModel with reactive state
-│   │   │   └── ui/                   # Jetpack Compose UI (Faders, Mute buttons, Preset grid)
-├── server/                           # Optional Node/TypeScript service for PiGateway / Web UI
-├── .gitignore
-└── README.md
+[ picontrol Browser UI ] / [ Mobile Tablets & Phones ]
+                      |
+                HTTP / SSE (:3100)
+                      v
+                [ pigateway ]
+                      | Proxy (/api/v1/sound/*)
+                      v
+             +-----------------+
+             |     pisound     |  (Port 3300)
+             +-----------------+
+                      |
+           HiQnet London DI (TCP :1023)
+                      v
+         +-------------------------+
+         |   BSS BLU-100 DSP       |
+         +-------------------------+
+          /           |           \
+ [ BLU-BIBs ]    [ BLU-BOB2 ]    [ BLU-DAN ]
+  (14 WL +        (Zone Power     (Dante AoIP to
+   12 Wired)       Amplifiers)     SQ-5 & PC)
 ```
 
 ---
 
-## 6. Next Steps & Implementation Roadmap
+## 2. Channel Matrix
 
-1. [x] Research & document audio protocols (Dante AoIP vs. HiQnet London DI).
-2. [x] Document Keskuskirkko rack hardware and wire protocol specifications.
-3. [ ] Build London DI protocol parser and socket client engine in Kotlin / Java.
-4. [ ] Build Android UI with Jetpack Compose (Faders, Mutes, Presets, Settings).
-5. [ ] Add mock BSS BLU-100 emulator server for local offline testing and CI.
-6. [ ] (Optional) Integrate London DI endpoints into `pigateway` and `picontrol` web UI.
+### Wireless Handhelds 1–4
+- `kapula1`: Kapula 1 (Liturgi / Pappi)
+- `kapula2`: Kapula 2 (Kanttori / Avustaja)
+- `kapula3`: Kapula 3 (Lukija / Tekstinlukija)
+- `kapula4`: Kapula 4 (Vierailija / Yleisö / Varakapula)
+
+### Wireless Headsets 5–14 ("Madonna Mics")
+- `madonna1`: Madonna 1 (Päämadonna / Saarnaaja)
+- `madonna2`: Madonna 2 (Liturgi Headset)
+- `madonna3`: Madonna 3 (Kanttori / Solisti)
+- `madonna4`–`madonna10`: Madonna 4–10 (Avustajat, näytelmät, esiintyjät)
+
+### Wired Microphones 1–12+
+- `wired1` / `wired2`: Alttari Vasen & Oikea
+- `wired3`: Lukupulpetti (Ambo)
+- `wired4`: Saarnatuoli
+- `wired5` / `wired6`: Kuoro Vasen & Oikea
+- `wired7` / `wired8`: Urut Positiivi & Pääurut
+- `wired9`: Flyygeli / Piano
+- `wired10`–`wired12`: Lattiarasiat 1–3 (Kuori AV09, AV10, Parvi)
+
+---
+
+## 3. Installation & Run
+
+Requires **Node.js >= 22**.
+
+```sh
+npm install
+npm run build
+npm test
+npm start                # Starts daemon on port 3300 (simulation mode by default)
+```
+
+For hardware production on the church LAN:
+```sh
+PISOUND_MODE=production PISOUND_SOUNDWEB_HOST=192.168.1.30 npm start
+```
+
+---
+
+## 4. CLI Usage
+
+Run with `node bin/pisound.mjs` or `npm run cli -- <command>`:
+
+```sh
+# View full status table of all handhelds, madonnas, and wired mics
+pisound status
+
+# Control individual microphones
+pisound mic madonna1 on                  # Turn on (unmute) Madonna 1
+pisound mic madonna1 off                 # Mute Madonna 1
+pisound mic madonna1 toggle              # Toggle between on and muted
+pisound mic madonna1 solo                # Solo Madonna 1 (mutes all other wireless mics!)
+pisound mic madonna1 vol 85              # Set volume to 85%
+
+# Fast wireless group controls
+pisound wireless mute-all                # Mutes all 14 wireless mics instantly
+pisound wireless all-on                  # Unmutes all 14 wireless mics
+
+# Scene & Routing Presets
+pisound preset normal                    # WL Normaali (Sanctuary automixer active)
+pisound preset mixer                     # WL Mikseriin (Routes wireless mics to SQ-5 console)
+pisound preset open                      # Audio Open (Startup state)
+pisound preset mute                      # Audio Mute (Shutdown state)
+```
+
+---
+
+## 5. REST & SSE API
+
+See full contract in [`CONTRACT.md`](CONTRACT.md).
+- `GET /health`: Health status.
+- `GET /api/v1/status`: Full system snapshot.
+- `GET /api/v1/mics`: List all mic states (with `?group=` or `?wireless=` filter).
+- `POST /api/v1/mics/:id/state`: `{ "on": boolean }`
+- `POST /api/v1/mics/:id/toggle`: Toggle mic on/off.
+- `POST /api/v1/mics/:id/solo`: Solo mic.
+- `POST /api/v1/mics/:id/volume`: `{ "volumePercent": 0..100 }`
+- `POST /api/v1/groups/:group/mute-all`: Bulk mute (`handheld`, `madonna`, `wireless`, `all`).
+- `POST /api/v1/presets/:preset`: Recall preset (`normal`, `mixer`, `open`, `mute`, or ID).
+- `GET /api/v1/events`: Server-Sent Events stream for live status updates to browser UIs.

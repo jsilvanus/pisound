@@ -1,20 +1,33 @@
 {
   "name": "pisound",
-  "version": "1.0.0",
-  "description": "BSS Soundweb London / HiQnet wireless mic control app and protocol tools",
+  "version": "0.1.0",
+  "description": "Sound and microphone controller service for BSS Soundweb London (HiQnet) in the Raspberry Pi production ecosystem",
+  "private": true,
   "type": "module",
-  "scripts": {
-    "sim": "node scripts/simulate-soundweb.mjs",
-    "test:client": "node scripts/test-client.mjs"
+  "engines": {
+    "node": ">=22"
   },
-  "keywords": [
-    "soundweb",
-    "hiqnet",
-    "bss",
-    "audio",
-    "dante",
-    "android"
-  ],
-  "author": "Juha Itäleino",
-  "license": "ISC"
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "test": "tsx --test tests/**/*.test.ts",
+    "cli": "tsx src/cli.ts",
+    "sim": "node scripts/simulate-soundweb.mjs"
+  },
+  "bin": {
+    "pisound": "bin/pisound.mjs"
+  },
+  "dependencies": {
+    "fastify": "^5.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.3"
+  },
+  "files": [
+    "dist",
+    "bin"
+  ]
 }
