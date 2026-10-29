@@ -95,7 +95,7 @@ export class SoundManager extends EventEmitter {
           volumePercent = 0;
         } else if (mix.id === 'sali') {
           enabled = isDefaultOn;
-          volumePercent = 100; // Sali is toggle only (no per-channel gain fader)
+          volumePercent = profileDef.defaultVolume; // Sali has its own profile default fader
         }
 
         channelMixes[mix.id] = { enabled, volumePercent };
@@ -255,26 +255,26 @@ export class SoundManager extends EventEmitter {
       throw new Error(`Microphone channel not found: ${channelId}`);
     }
 
-    // Enforce toggle vs gain rules
-    if (config.controlType === 'toggle') {
-      if (send.volumePercent !== undefined) {
-        throw new Error(
-          `Mix '${mixId}' (${config.name}) is a toggle mix (on/off routing only); per-channel gain faders are not supported.`
-        );
-      }
-    }
-
     const currentSend = channel.mixes[mixId] || {
       enabled: config.defaultEnabled,
-      volumePercent: config.controlType === 'toggle' ? 100 : 75,
+      volumePercent: 75,
     };
 
     if (send.enabled !== undefined) {
       currentSend.enabled = send.enabled;
+      const { nodeId, objectId, muteParam } = this.getChannelSendParams(channel);
+      this.soundweb.send(buildSetMutePacket(muteParam, !send.enabled, nodeId, objectId));
     }
 
-    if (send.volumePercent !== undefined && config.controlType === 'gain') {
+    if (send.volumePercent !== undefined) {
+      if (config.controlType === 'toggle') {
+        throw new Error(
+          `Mix '${mixId}' (${config.name}) is a toggle mix (on/off routing only); per-channel gain faders are not supported.`
+        );
+      }
       currentSend.volumePercent = Math.max(0, Math.min(100, Math.round(send.volumePercent)));
+      const { nodeId, objectId, gainParam } = this.getChannelSendParams(channel);
+      this.soundweb.send(buildSetGainPercentPacket(gainParam, currentSend.volumePercent, nodeId, objectId));
     }
 
     channel.mixes[mixId] = currentSend;
@@ -284,7 +284,6 @@ export class SoundManager extends EventEmitter {
     if (mixId === 'striimi') {
       channel.volumePercent = currentSend.volumePercent;
       channel.baseVolumePercent = currentSend.volumePercent;
-      this.soundweb.send(buildSetGainPercentPacket(channel.channelIndex, currentSend.volumePercent));
     }
 
     this.emit('mix_channel_change', { mixId, channelId, send: currentSend });

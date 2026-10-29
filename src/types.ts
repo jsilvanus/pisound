@@ -35,7 +35,7 @@ export const DEFAULT_MIXES: AudioMixConfig[] = [
   {
     id: 'sali',
     name: 'Sali (Kirkkosali PA)',
-    controlType: 'toggle', // On/Off only, no per-channel gain fader
+    controlType: 'gain', // Full per-channel gain faders + mute (matches iPad Mixer.xml & Langattomat.xml)
     hasMasterFader: true,
     defaultMasterVolume: 80,
     defaultEnabled: true,
@@ -62,8 +62,8 @@ export const DEFAULT_MIXES: AudioMixConfig[] = [
     defaultMasterVolume: 80,
     defaultEnabled: true,
     nodeId: 1,
-    objectId: [0x00, 0x01, 0x68], // RADIO VOL block (Obj 360 in Audio Architect)
-    masterParamId: 0, // Gain is svID 0, Mute is svID 1
+    objectId: [0x00, 0x01, 0x68], // RADIO VOL block (Obj 360)
+    masterParamId: 0,
   },
 ];
 

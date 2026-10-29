@@ -41,7 +41,7 @@ test('telemetry: binary packet roundtrip with all 26 channels and multiple mixes
 
   // Check mix summary
   const saliMix = decoded.mixes.find((m) => m.id === 'sali')!;
-  assert.equal(saliMix.controlType, 'toggle');
+  assert.equal(saliMix.controlType, 'gain');
   const striimiMix = decoded.mixes.find((m) => m.id === 'striimi')!;
   assert.equal(striimiMix.controlType, 'gain');
 

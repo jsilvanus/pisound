@@ -70,7 +70,7 @@ test('server: supports multi-mix REST routes with Sali toggle and Striimi gain',
   // 2. GET /api/v1/mixes/sali
   const saliRes = await app.inject({ method: 'GET', url: '/api/v1/mixes/sali' });
   assert.equal(saliRes.statusCode, 200);
-  assert.equal(saliRes.json().config.controlType, 'toggle');
+  assert.equal(saliRes.json().config.controlType, 'gain');
   assert.equal(saliRes.json().channels.length, 26);
 
   // 3. POST /api/v1/mixes/sali/channels/kapula1 with enabled: false
@@ -82,14 +82,14 @@ test('server: supports multi-mix REST routes with Sali toggle and Striimi gain',
   assert.equal(saliToggleRes.statusCode, 200);
   assert.equal(saliToggleRes.json().send.enabled, false);
 
-  // 4. POST /api/v1/mixes/sali/channels/kapula1 with volumePercent should FAIL (toggle only!)
-  const saliFailRes = await app.inject({
+  // 4. POST /api/v1/mixes/sali/channels/kapula1 with volumePercent succeeds
+  const saliGainRes = await app.inject({
     method: 'POST',
     url: '/api/v1/mixes/sali/channels/kapula1',
-    payload: { volumePercent: 75 },
+    payload: { volumePercent: 78 },
   });
-  assert.equal(saliFailRes.statusCode, 400);
-  assert.match(saliFailRes.json().error, /toggle mix/);
+  assert.equal(saliGainRes.statusCode, 200);
+  assert.equal(saliGainRes.json().send.volumePercent, 78);
 
   // 5. POST /api/v1/mixes/striimi/channels/kapula1 with volumePercent should SUCCEED
   const striimiGainRes = await app.inject({

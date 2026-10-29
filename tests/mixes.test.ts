@@ -13,7 +13,7 @@ test('mixes: default configuration contains Sali (PA), Striimi, and Web Radio', 
   const webradio = mixes.find((m) => m.id === 'webradio')!;
 
   assert.ok(sali);
-  assert.equal(sali.controlType, 'toggle'); // On/Off only, no gain faders!
+  assert.equal(sali.controlType, 'gain'); // Full fader gain + mute matching iPad
 
   assert.ok(striimi);
   assert.equal(striimi.controlType, 'gain'); // Full fader gain + mute
@@ -73,20 +73,28 @@ test('mixes: allows configurable custom mixes (e.g. 4 mixes with videochat)', ()
   assert.ok(snapshot.mixes.find((m) => m.id === 'videochat'));
 });
 
-test('mixes: Sali is toggle only and rejects per-channel gain changes', () => {
+test('mixes: Sali has independent per-channel faders and mute toggles matching iPad', () => {
   const manager = new SoundManager({ mode: 'simulation', enableAutoPiLoop: false });
 
-  // Toggling on/off in Sali works
-  const send1 = manager.setMixChannel('sali', 'kapula1', { enabled: true });
+  // Setting Sali gain to 82% works
+  const send1 = manager.setMixChannel('sali', 'kapula1', { enabled: true, volumePercent: 82 });
   assert.equal(send1.enabled, true);
+  assert.equal(send1.volumePercent, 82);
 
+  // Muting in Sali works
   const send2 = manager.setMixChannel('sali', 'kapula1', { enabled: false });
   assert.equal(send2.enabled, false);
+  assert.equal(send2.volumePercent, 82);
 
-  // Attempting to set fader volume in Sali throws an error
+  // Custom toggle-only mix rejects volumePercent
+  const customToggleManager = new SoundManager({
+    mode: 'simulation',
+    enableAutoPiLoop: false,
+    mixes: [{ id: 'relay', name: 'Relay', controlType: 'toggle', hasMasterFader: false, defaultMasterVolume: 80, defaultEnabled: true }],
+  });
   assert.throws(
     () => {
-      manager.setMixChannel('sali', 'kapula1', { volumePercent: 50 });
+      customToggleManager.setMixChannel('relay', 'kapula1', { volumePercent: 50 });
     },
     /toggle mix \(on\/off routing only\); per-channel gain faders are not supported/
   );
