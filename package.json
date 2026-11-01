@@ -34,7 +34,7 @@
   "pi": {
     "service": "pisound",
     "displayName": "PiSound",
-    "layer": "Layer 1: Southbound HW",
+    "layer": "Layer 1: Southbound hardware",
     "port": 3105,
     "ports": {},
     "healthEndpoint": "/health",
