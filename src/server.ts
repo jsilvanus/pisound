@@ -28,7 +28,7 @@ export function createServer(options: ServerOptions = {}): {
 } {
   const app = fastify({ logger: false });
   const manager = options.manager ?? new SoundManager();
-  const port = options.port ?? parseInt(process.env.PISOUND_PORT || '3300', 10);
+  const port = options.port ?? parseInt(process.env.PISOUND_PORT || '3105', 10);
   const host = options.host ?? (process.env.PISOUND_HOST || '0.0.0.0');
 
   let telemetrySender: TelemetrySender | undefined;
