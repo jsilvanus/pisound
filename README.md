@@ -69,22 +69,22 @@ Sound and microphone controller service and CLI for **BSS Soundweb London (HiQne
 Requires **Node.js >= 22**.
 
 ```sh
-npm install
-npm run build
-npm test
-npm start                # Starts daemon on port 3300 (simulation mode by default)
+pnpm install
+pnpm run build
+pnpm test
+pnpm start                # Starts daemon on port 3300 (simulation mode by default)
 ```
 
 For hardware production on the church LAN:
 ```sh
-PISOUND_MODE=production PISOUND_SOUNDWEB_HOST=192.168.1.30 npm start
+PISOUND_MODE=production PISOUND_SOUNDWEB_HOST=192.168.1.30 pnpm start
 ```
 
 ---
 
 ## 4. CLI Usage
 
-Run with `node bin/pisound.mjs` or `npm run cli -- <command>`:
+Run with `node bin/pisound.mjs` or `pnpm run cli -- <command>`:
 
 ```sh
 # View full status table of all handhelds, madonnas, and wired mics

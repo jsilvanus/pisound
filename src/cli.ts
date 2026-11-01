@@ -29,7 +29,7 @@ async function fetchJson<T>(path: string, options: RequestInit = {}): Promise<T>
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`\x1b[31mError connecting to pisound daemon at ${url}:\x1b[0m ${message}`);
-    console.error(`Is the pisound service running? (npm start)`);
+    console.error(`Is the pisound service running? (pnpm start)`);
     process.exit(1);
   }
 }
