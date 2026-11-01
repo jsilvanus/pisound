@@ -9,18 +9,18 @@ This document outlines how `pisound` is integrated into the browser-based contro
 ```
 [ picontrol Browser UI ]
           |
-    HTTP / SSE (:3100)
+    HTTP / SSE (:3000)
           v
     [ pigateway ]
           | Proxy (/api/v1/sound/*)
           v
-     [ pisound ] (:3300)
+     [ pisound ] (:3105)
           | London DI (TCP :1023)
           v
  [ BSS BLU-100 DSP ]
 ```
 
-Calls route through `pigateway` (or directly to `pisound:3300` in LAN/development).
+Calls route through `pigateway` (or directly to `pisound:3105` in LAN/development).
 
 ---
 

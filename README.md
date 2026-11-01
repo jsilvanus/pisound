@@ -17,13 +17,13 @@ Sound and microphone controller service and CLI for **BSS Soundweb London (HiQne
 ```
 [ picontrol Browser UI ] / [ Mobile Tablets & Phones ]
                       |
-                HTTP / SSE (:3100)
+                HTTP / SSE (:3000)
                       v
                 [ pigateway ]
                       | Proxy (/api/v1/sound/*)
                       v
              +-----------------+
-             |     pisound     |  (Port 3300)
+             |     pisound     |  (Port 3105)
              +-----------------+
                       |
            HiQnet London DI (TCP :1023)
@@ -72,7 +72,7 @@ Requires **Node.js >= 22**.
 pnpm install
 pnpm run build
 pnpm test
-pnpm start                # Starts daemon on port 3300 (simulation mode by default)
+pnpm start                # Starts daemon on port 3105 (simulation mode by default)
 ```
 
 For hardware production on the church LAN:

@@ -6,7 +6,7 @@
 
 ## 1. Network & Port Allocations
 
-* **Default Service Port**: `3300` (HTTP REST & SSE)
+* **Default Service Port**: `3105` (HTTP REST & SSE)
 * **Default Host**: `0.0.0.0`
 * **BSS Soundweb DSP Target**: `192.168.1.30:1023`
 * **Mode**: `simulation` (default) or `production`

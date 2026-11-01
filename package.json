@@ -35,7 +35,7 @@
     "service": "pisound",
     "displayName": "PiSound",
     "layer": "Layer 1: Southbound HW",
-    "port": 3300,
+    "port": 3105,
     "ports": {},
     "healthEndpoint": "/health",
     "envPortVar": "PISOUND_PORT"
