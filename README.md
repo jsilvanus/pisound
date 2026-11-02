@@ -12,7 +12,7 @@ Sound and microphone controller service and CLI for **BSS Soundweb London (HiQne
 
 ## 1. Role in the Pi Production Ecosystem
 
-`pisound` is the dedicated audio subsystem companion to `pimatrix` (video routing), `pitube` (YouTube broadcasts), `pilight` (tally lights), `pivoice` (speech telemetry), and `pigateway`:
+`pisound` is the dedicated audio subsystem companion to `pimatrix` (video routing), `pitube` (YouTube broadcasts), `pitally` (tally lights), `pivoice` (speech telemetry), and `pigateway`:
 
 ```
 [ picontrol Browser UI ] / [ Mobile Tablets & Phones ]
