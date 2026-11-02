@@ -134,6 +134,21 @@ export class SoundManager extends EventEmitter {
     }
   }
 
+  public getDspHealth() {
+    const base = { status: this.soundweb.getStatus(), mode: this.mode };
+    if (this.soundweb instanceof SoundwebClient) {
+      return {
+        ...base,
+        host: this.soundweb.host,
+        port: this.soundweb.port,
+        lastError: this.soundweb.lastError,
+        lastConnectedAt: this.soundweb.lastConnectedAt,
+        lastAttemptAt: this.soundweb.lastAttemptAt,
+      };
+    }
+    return base;
+  }
+
   public getSnapshot(): SystemSoundSnapshot {
     const channelList = Array.from(this.channels.values());
     const activeWireless = channelList.filter((c) => c.isWireless && c.isOn).length;

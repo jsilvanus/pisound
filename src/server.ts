@@ -51,7 +51,9 @@ export function createServer(options: ServerOptions = {}): {
 
   // 1. Health check
   app.get('/health', async () => {
-    return { status: 'ok', service: 'pisound' };
+    // The service itself is up; the DSP being offline is normal (AV system off).
+    const dsp = manager.getDspHealth();
+    return { status: dsp.status === 'connected' || dsp.status === 'simulated' ? 'ok' : 'degraded', service: 'pisound', dsp };
   });
 
   // 2. Full system status snapshot

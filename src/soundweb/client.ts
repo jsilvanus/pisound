@@ -7,6 +7,7 @@ export interface SoundwebClientOptions {
   host?: string;
   port?: number;
   reconnectIntervalMs?: number;
+  connectTimeoutMs?: number;
   autoConnect?: boolean;
 }
 
@@ -18,13 +19,18 @@ export class SoundwebClient extends EventEmitter {
   private status: SoundwebConnectionStatus = 'disconnected';
   private incomingBuffer: Buffer = Buffer.alloc(0);
   private reconnectTimer: NodeJS.Timeout | null = null;
+  private connectTimeoutMs: number;
   private isDestroyed = false;
+  public lastError: string | null = null;
+  public lastConnectedAt: string | null = null;
+  public lastAttemptAt: string | null = null;
 
   constructor(options: SoundwebClientOptions = {}) {
     super();
     this.host = options.host || process.env.PISOUND_SOUNDWEB_HOST || '192.168.1.30';
     this.port = options.port || parseInt(process.env.PISOUND_SOUNDWEB_PORT || '1023', 10);
-    this.reconnectIntervalMs = options.reconnectIntervalMs || 5000;
+    this.reconnectIntervalMs = options.reconnectIntervalMs || parseInt(process.env.PISOUND_RECONNECT_MS || '30000', 10);
+    this.connectTimeoutMs = options.connectTimeoutMs || 5000;
 
     if (options.autoConnect !== false) {
       this.connect();
@@ -39,10 +45,16 @@ export class SoundwebClient extends EventEmitter {
     if (this.isDestroyed || this.socket) return;
 
     this.setStatus('connecting');
+    this.lastAttemptAt = new Date().toISOString();
     const socket = new net.Socket();
     this.socket = socket;
+    // An unreachable host (device powered off) must fail fast and be retried later.
+    socket.setTimeout(this.connectTimeoutMs, () => socket.destroy(new Error('connect timeout')));
 
     socket.connect(this.port, this.host, () => {
+      socket.setTimeout(0);
+      this.lastError = null;
+      this.lastConnectedAt = new Date().toISOString();
       this.setStatus('connected');
       this.incomingBuffer = Buffer.alloc(0);
       this.emit('connected', { host: this.host, port: this.port });
@@ -59,7 +71,10 @@ export class SoundwebClient extends EventEmitter {
     });
 
     socket.on('error', (err) => {
-      this.emit('error', err);
+      // An offline DSP is normal (it is off with the AV system). Record it and let
+      // 'close' schedule the retry; never emit 'error' without a listener (that throws).
+      this.lastError = err.message;
+      this.emit('connect_error', err);
     });
   }
 
@@ -89,7 +104,8 @@ export class SoundwebClient extends EventEmitter {
       this.socket.write(packet);
       return true;
     } catch (err) {
-      this.emit('error', err);
+      this.lastError = err instanceof Error ? err.message : String(err);
+      this.emit('connect_error', err);
       return false;
     }
   }
