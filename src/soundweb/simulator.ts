@@ -13,6 +13,10 @@ export class SoundwebSimulator extends EventEmitter {
     return this.status;
   }
 
+  public async probe(): Promise<{ reachable: boolean; latencyMs: number; error?: string | undefined }> {
+    return { reachable: true, latencyMs: 0 };
+  }
+
   public connect(): void {
     this.status = 'simulated';
     this.emit('connected', { host: 'simulated', port: 1023 });

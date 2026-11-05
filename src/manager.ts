@@ -16,6 +16,8 @@ import {
   type RoutingPreset,
   type RoutingPresetKey,
   type SoundwebConnectionStatus,
+  type SoundwebProbeResult,
+  type EcosystemProbeResult,
   type SystemSoundSnapshot,
 } from './types.js';
 import {
@@ -172,6 +174,81 @@ export class SoundManager extends EventEmitter {
       activeWiredCount: activeWired,
       mixes: this.getMixMasterStates(),
       channels: channelList,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  public getMode(): 'production' | 'simulation' {
+    return this.mode;
+  }
+
+  public getSoundwebStatus(): SoundwebConnectionStatus {
+    return this.soundweb.getStatus();
+  }
+
+  public getHost(): string {
+    return this.soundweb instanceof SoundwebClient ? this.soundweb.host : 'simulated';
+  }
+
+  public getPort(): number {
+    return this.soundweb instanceof SoundwebClient ? this.soundweb.port : 1023;
+  }
+
+  public getActiveWirelessCount(): number {
+    return Array.from(this.channels.values()).filter((c) => c.isWireless && c.isOn).length;
+  }
+
+  public getActiveWiredCount(): number {
+    return Array.from(this.channels.values()).filter((c) => !c.isWireless && c.isOn).length;
+  }
+
+  public async probeSoundweb(timeoutMs = 1500): Promise<SoundwebProbeResult> {
+    const probeRes = await this.soundweb.probe(timeoutMs);
+    const host = this.getHost();
+    const port = this.getPort();
+    const err = 'error' in probeRes ? probeRes.error : undefined;
+    return {
+      reachable: probeRes.reachable,
+      host,
+      port,
+      mode: this.mode,
+      status: this.getSoundwebStatus(),
+      ...(probeRes.latencyMs !== undefined ? { latencyMs: probeRes.latencyMs } : {}),
+      ...(err ? { error: err } : {}),
+    };
+  }
+
+  public async probe(options?: { gatewayUrl?: string | undefined; timeoutMs?: number | undefined } | undefined): Promise<EcosystemProbeResult> {
+    const soundwebRes = await this.probeSoundweb(options?.timeoutMs);
+    let gatewayRes: { reachable: boolean; url?: string; latencyMs?: number; error?: string } | undefined;
+
+    const gwUrl = (options?.gatewayUrl || process.env.PISOUND_GATEWAY_HTTP_URL || 'http://127.0.0.1:3100').replace(/\/+$/, '');
+    try {
+      const start = Date.now();
+      const res = await fetch(`${gwUrl}/health`, { signal: AbortSignal.timeout(options?.timeoutMs ?? 1500) });
+      gatewayRes = {
+        reachable: res.ok,
+        url: gwUrl,
+        latencyMs: Date.now() - start,
+      };
+    } catch (err: unknown) {
+      gatewayRes = {
+        reachable: false,
+        url: gwUrl,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+
+    return {
+      ok: soundwebRes.reachable,
+      service: 'pisound',
+      soundweb: soundwebRes,
+      gateway: gatewayRes,
+      telemetry: {
+        running: true,
+        host: process.env.PISOUND_GATEWAY_HOST || '127.0.0.1',
+        port: parseInt(process.env.PISOUND_GATEWAY_PORT || '3102', 10),
+      },
       timestamp: new Date().toISOString(),
     };
   }

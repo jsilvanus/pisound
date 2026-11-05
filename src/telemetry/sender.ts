@@ -33,6 +33,10 @@ export class TelemetrySender extends EventEmitter {
     this.intervalMs = options.intervalMs || 100;
   }
 
+  public isSenderRunning(): boolean {
+    return this.isRunning;
+  }
+
   public start(): void {
     if (this.isRunning) return;
     this.isRunning = true;

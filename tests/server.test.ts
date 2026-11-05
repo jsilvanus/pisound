@@ -119,3 +119,27 @@ test('server: supports multi-mix REST routes with Sali toggle and Striimi gain',
 
   await stop();
 });
+
+test('server: provides active probing and health metadata', async () => {
+  const manager = new SoundManager({ mode: 'simulation', enableAutoPiLoop: false });
+  const { app, stop } = createServer({ manager });
+
+  const healthRes = await app.inject({ method: 'GET', url: '/health' });
+  assert.equal(healthRes.statusCode, 200);
+  const health = healthRes.json();
+  assert.equal(health.status, 'ok');
+  assert.equal(health.service, 'pisound');
+  assert.equal(health.mode, 'simulation');
+  assert.equal(health.soundweb.status, 'simulated');
+  assert.equal(typeof health.activeMics.total, 'number');
+
+  const probeRes = await app.inject({ method: 'GET', url: '/api/v1/probe' });
+  assert.equal(probeRes.statusCode, 200);
+  const probe = probeRes.json();
+  assert.equal(probe.ok, true);
+  assert.equal(probe.service, 'pisound');
+  assert.equal(probe.soundweb.reachable, true);
+  assert.equal(probe.soundweb.status, 'simulated');
+
+  await stop();
+});

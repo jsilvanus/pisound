@@ -2,6 +2,7 @@
 import type {
   AudioMixConfig,
   ChannelMixSend,
+  EcosystemProbeResult,
   InputProfileDefinition,
   MicChannelState,
   MixMasterState,
@@ -80,6 +81,38 @@ export async function runCli(): Promise<void> {
   if (command === 'status' || command === 'ls' || command === 'list') {
     const snapshot = await fetchJson<SystemSoundSnapshot>('/api/v1/status');
     printStatusTable(snapshot);
+    return;
+  }
+
+  if (command === 'probe') {
+    const isJson = args.includes('--json');
+    let gatewayUrl: string | undefined;
+    const gwIndex = args.indexOf('--gateway');
+    if (gwIndex !== -1 && args[gwIndex + 1]) {
+      gatewayUrl = args[gwIndex + 1];
+    }
+    const query = gatewayUrl ? `?gateway=${encodeURIComponent(gatewayUrl)}` : '';
+    const probe = await fetchJson<EcosystemProbeResult>(`/api/v1/probe${query}`);
+    if (isJson) {
+      console.log(JSON.stringify(probe, null, 2));
+      return;
+    }
+    console.log(`\n\x1b[1m=== PISOUND ECOSYSTEM PROBE ===\x1b[0m`);
+    console.log(`Overall:         ${probe.ok ? '\x1b[32mOK / REACHABLE\x1b[0m' : '\x1b[31mDEGRADED\x1b[0m'}`);
+    console.log(`Mode:            ${probe.soundweb.mode}`);
+    console.log(`Soundweb DSP:    ${probe.soundweb.host}:${probe.soundweb.port} (${probe.soundweb.status.toUpperCase()})`);
+    console.log(`DSP Reachable:   ${probe.soundweb.reachable ? '\x1b[32mYES\x1b[0m' : '\x1b[31mNO\x1b[0m'}${probe.soundweb.latencyMs !== undefined ? ` (${probe.soundweb.latencyMs}ms)` : ''}`);
+    if (probe.soundweb.error) {
+      console.log(`DSP Error:       \x1b[31m${probe.soundweb.error}\x1b[0m`);
+    }
+    if (probe.gateway) {
+      console.log(`Pi Gateway:      ${probe.gateway.url} -> ${probe.gateway.reachable ? '\x1b[32mONLINE\x1b[0m' : '\x1b[31mOFFLINE\x1b[0m'}${probe.gateway.latencyMs !== undefined ? ` (${probe.gateway.latencyMs}ms)` : ''}`);
+      if (probe.gateway.error) {
+        console.log(`Gateway Error:   \x1b[31m${probe.gateway.error}\x1b[0m`);
+      }
+    }
+    console.log(`Telemetry:       ${probe.telemetry.running ? '\x1b[32mRUNNING\x1b[0m' : 'STOPPED'} -> ${probe.telemetry.host}:${probe.telemetry.port}`);
+    console.log();
     return;
   }
 
@@ -383,6 +416,7 @@ export async function runCli(): Promise<void> {
 
 Usage:
   pisound status                           Show full status table of all mics, profiles & AGC
+  pisound probe [--gateway <url>] [--json] Probe Soundweb DSP hardware & Pi Gateway reachability
   pisound profiles                         List all available input profiles with EQ & AGC settings
   pisound mix list                         List all configured mixes (Sali, Striimi, Web Radio, etc.)
   pisound mix <mixId>                      Show channel status in a mix (e.g. 'pisound mix sali')

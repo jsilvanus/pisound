@@ -49,12 +49,49 @@ export function createServer(options: ServerOptions = {}): {
     }
   });
 
-  // 1. Health check
+  // 1. Health check with ecosystem & probe metadata
   app.get('/health', async () => {
     // The service itself is up; the DSP being offline is normal (AV system off).
     const dsp = manager.getDspHealth();
-    return { status: dsp.status === 'connected' || dsp.status === 'simulated' ? 'ok' : 'degraded', service: 'pisound', dsp };
+    return {
+      status: dsp.status === 'connected' || dsp.status === 'simulated' ? 'ok' : 'degraded',
+      service: 'pisound',
+      dsp,
+      mode: manager.getMode(),
+      soundweb: {
+        status: manager.getSoundwebStatus(),
+        host: manager.getHost(),
+        port: manager.getPort(),
+      },
+      telemetry: {
+        running: telemetrySender?.isSenderRunning() ?? false,
+        host: telemetrySender?.host ?? '127.0.0.1',
+        port: telemetrySender?.port ?? 3102,
+      },
+      activeMics: {
+        wireless: manager.getActiveWirelessCount(),
+        wired: manager.getActiveWiredCount(),
+        total: manager.getAllChannels().filter((c) => c.isOn).length,
+      },
+      timestamp: new Date().toISOString(),
+    };
   });
+
+  // 1b. Active Probe endpoint (POST or GET /api/v1/probe)
+  const probeHandler = async (req: { query: { gateway?: string; timeoutMs?: string } }) => {
+    const gatewayUrl = req.query?.gateway;
+    const timeoutMs = req.query?.timeoutMs ? parseInt(req.query.timeoutMs, 10) : undefined;
+    const probe = await manager.probe({ gatewayUrl, timeoutMs });
+    if (telemetrySender) {
+      probe.telemetry.running = telemetrySender.isSenderRunning();
+      probe.telemetry.host = telemetrySender.host;
+      probe.telemetry.port = telemetrySender.port;
+    }
+    return probe;
+  };
+
+  app.get<{ Querystring: { gateway?: string; timeoutMs?: string } }>('/api/v1/probe', probeHandler);
+  app.post<{ Querystring: { gateway?: string; timeoutMs?: string } }>('/api/v1/probe', probeHandler);
 
   // 2. Full system status snapshot
   app.get('/api/v1/status', async () => {

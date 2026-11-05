@@ -41,6 +41,45 @@ export class SoundwebClient extends EventEmitter {
     return this.status;
   }
 
+  public async probe(timeoutMs = 1500): Promise<{ reachable: boolean; latencyMs?: number; error?: string }> {
+    if (this.status === 'connected') {
+      return { reachable: true, latencyMs: 1 };
+    }
+    const start = Date.now();
+    return new Promise((resolve) => {
+      const probeSocket = new net.Socket();
+      probeSocket.setTimeout(timeoutMs);
+
+      const cleanup = () => {
+        probeSocket.removeAllListeners();
+        probeSocket.destroy();
+      };
+
+      probeSocket.once('connect', () => {
+        const latencyMs = Date.now() - start;
+        cleanup();
+        resolve({ reachable: true, latencyMs });
+      });
+
+      probeSocket.once('timeout', () => {
+        cleanup();
+        resolve({ reachable: false, error: `Connection timed out after ${timeoutMs}ms` });
+      });
+
+      probeSocket.once('error', (err) => {
+        cleanup();
+        resolve({ reachable: false, error: err.message });
+      });
+
+      try {
+        probeSocket.connect(this.port, this.host);
+      } catch (err: unknown) {
+        cleanup();
+        resolve({ reachable: false, error: err instanceof Error ? err.message : String(err) });
+      }
+    });
+  }
+
   public connect(): void {
     if (this.isDestroyed || this.socket) return;
 

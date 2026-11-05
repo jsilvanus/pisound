@@ -369,6 +369,34 @@ export const KNOWN_PRESETS: Record<RoutingPresetKey, RoutingPreset> = {
 
 export type SoundwebConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'simulated';
 
+export interface SoundwebProbeResult {
+  reachable: boolean;
+  host: string;
+  port: number;
+  mode: 'production' | 'simulation';
+  status: SoundwebConnectionStatus;
+  latencyMs?: number | undefined;
+  error?: string | undefined;
+}
+
+export interface EcosystemProbeResult {
+  ok: boolean;
+  service: 'pisound';
+  soundweb: SoundwebProbeResult;
+  gateway?: {
+    reachable: boolean;
+    url?: string | undefined;
+    latencyMs?: number | undefined;
+    error?: string | undefined;
+  } | undefined;
+  telemetry: {
+    running: boolean;
+    host: string;
+    port: number;
+  };
+  timestamp: string;
+}
+
 export interface SystemSoundSnapshot {
   service: 'pisound';
   status: SoundwebConnectionStatus;
